@@ -1,0 +1,13 @@
+function [h,p,ci,stat] = ttest_print(varargin)
+% [h,p,ci,stat] = ttest_print(varargin)
+% Perform a paired t-test, using the matlab standard t-test function.
+% Also print out a one-line summary of the results, in the form
+%  mean1 (sd1) - mean2 (sd2) = diff (sd) ;  t(df) = tval, p=...
+%
+
+[h,p,ci,stat] = ttest(varargin{:});
+fprintf('%0.3g (%0.3g) - %0.3g (%0.3g) = %0.3g (%0.3g);\t t(%g)=%0.3g, p=%0.3g\n', ...
+  nanmean(varargin{1}), nanstd(varargin{1}), nanmean(varargin{2}), nanstd(varargin{2}), ...
+  nanmean(varargin{1}-varargin{2}), nanstd(varargin{1}-varargin{2}), ...
+  stat.df, stat.tstat, p );
+

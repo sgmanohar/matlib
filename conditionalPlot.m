@@ -4,6 +4,7 @@ function [Xb,Yb, p,t, h, resid ]=conditionalPlot(X,Y, Nbins, varargin)
 %      X{ SUBJECT, CONDITION } ( TRIAL )
 % or   X( TRIAL, SUBJECT )            -- for one condition
 % or   X( TRIAL, SUBJECT, CONDITION ) -- for multiple conditions
+% or   { Table, 'xvar', 'yvar', 'subject', 'condition' }
 %
 % Takes sliding quantile bins of X, and calculates the mean Y for 
 % each bin. Nbins indicates the width of the window (5 means 20 percentiles)
@@ -52,7 +53,45 @@ function [Xb,Yb, p,t, h, resid ]=conditionalPlot(X,Y, Nbins, varargin)
 
 %%%%%%%%%%%%%%%%%%%%%
 % Setup Parameters
+
+% handle tables as inputs
+if iscell(X) & numel(X)<6 & istable(X{1}) % table form
+  if numel(X)==5 % {T, 'xvar','yvar','sub','lines'}
+    sub = X{1}.(X{4}); 
+    con = X{1}.(X{5});
+    usub =unique(sub);
+    ucon = unique(con);
+    for i=1:length(usub)
+      for j=1:length(ucon)
+        tX{i,j} = X{1}.(X{2})(sub==usub(i) & con==ucon(j));
+        tY{i,j} = X{1}.(X{3})(sub==usub(i) & con==ucon(j));
+      end
+    end
+  elseif numel(X)==4 % {T,X,Y,G}
+    sub = X{1}.(X{4}); 
+    usub =unique(sub);
+    for i=1:length(usub)
+      tX{i,1} = X{1}.(X{2})( sub==usub(i) );
+      tY{i,1} = X{1}.(X{3})( sub==usub(i) );
+    end    
+  elseif numel(X)==3 % {T, X, Y}
+    tX = X{1}.(X{2});
+    tY = X{1}.(X{3});
+  elseif numel(X)==2, error('please specify two variables')
+  elseif numel(X)==1, error('please specify two variables')
+  end
+  if exist('Y','var') % shift the other parmeters along by one, since Y is already done
+    if exist('Nbins','var')
+      varargin=[{Nbins} varargin];
+    end
+    Nbins = Y;
+  end
+  labels=X(2:end); % keep values in table form
+  X=tX;Y=tY;
+end % table version
+
 if(~exist('Nbins','var') || isempty(Nbins)) Nbins=5; end;
+
 
 wascells = iscell(X); % keep track of what format input was
 if ~iscell(X)
@@ -159,17 +198,24 @@ if ~exist('SMOOTH','var'), SMOOTH   = binwidth_n;    end  % smoothing width = wi
 %%%%%%%%%%%%%%%%%%%%%
 % Calculate binning
 
+FULL_RANGE = true;  % if false, exclude 1% of highest and lowest x-values.
 %%%% change the outer 'for' to 'parfor' for faster execution.
 for(i=1:size(X,1))       % for each subject
   x_i=nan(size(X,2),N);  % keep track of bin centres
   for(j=1:size(X,2))     % for each condition
     if ~STANDARD_BINNING      % SLIDING WINDOW BINS
-      quantiles = quantile(X{i,j}, linspace(0,1,Nq+1)); % create quantiles
+      quantiles = quantile(X{i,j}, linspace(0,1,Nq)); % create quantiles
       % go through bins, but there aren't 100 bins because of the width!
       for q=1:N   % e.g. 1:80 for 5 bins
         % get start, mid and end of the bin
-        range=quantiles( q + [0,floor(Nq*binwidth/2), floor(Nq*binwidth)] );
-        f = X{i,j} > range(1)  &  X{i,j} <= range(3); % filter data within range
+        if FULL_RANGE % uses whole range of data 
+          range=quantiles( q + [0,floor(Nq*binwidth/2), floor(Nq*binwidth)] );
+        else % remove 1% highest and lowest x-data 
+          range=quantiles( q + [1,floor(Nq*binwidth/2), floor(Nq*binwidth)-1] );
+        end
+        % filter data within range - keep symmetrical top and bottom edges
+        % (otherwise gives biases)
+        f = X{i,j} > range(1)  &  X{i,j} < range(3); 
         % Yb ( SUBJECT, CONDITION, QUANTILE )
         Yb(   i,j,q) = MEANFUNC( Y{i,j}(f) );      % mean of Y in each bin
         Yb_sd(i,j,q) = STDFUNC(  Y{i,j}(f) ) / sqrt(sum(f)) ; % Y standard error for each bin
@@ -345,6 +391,13 @@ else % SLIDING BIN = we have a whole curve to plot
     end
   end
 end
+
+if exist('labels','var')
+  if length(labels)>0,   xlabel(labels{1}); end
+  if length(labels)>1,   ylabel(labels{2}); end
+  if length(labels)>3,   legend(labels{4}); end
+end
+
 
 if ~oldhold % restore "graphics hold" state
   hold off;

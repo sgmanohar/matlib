@@ -348,32 +348,32 @@ else % SLIDING BIN = we have a whole curve to plot
     end
     if numel(erro)==1, erro=erro*ones(size(line)); end
     if SMOOTH, line=smoothn(line, SMOOTH); erro=smoothn(erro, SMOOTH); end
-    args=varargin;
-    % if there is more than one line, add in the color-order
-    if any(strcmpi(args,'color'))
+    args=varargin;                % which arguments to send to the plot command
+    if any(strcmpi(args,'color')) % has color been provided as a parameter?
       ci = find(strcmpi(args,'color'));
       colj= args{ci+1};
-    else
-      colj = cols(mod(j-1,size(cols,1))+1,:);
-      %if size(Xb,2)>1,
-        args=[args 'Color',colj]; 
+    else                          % if not, cycle through list of colours
+      % if there is more than one line, add in the color-order
+      colj = cols(mod(j-1,size(cols,1))+1,:); 
+      %if size(Xb,2)>1,           % if there's more than one condition,
+        args=[args 'Color',colj]; % set colour for each condition separately
       %end
     end
-    if FILL_AREA<3 % if not quantiled,
+    if FILL_AREA<3 % if not quantiled, plot the mean as a line with dots
       h2=plot(x, line, args{:}, 'Marker','.',plotargs{:}); h=[h h2];
       hold on
     end
-    if ~FILL_AREA % DOTTED LINES?
+    if ~FILL_AREA % show error bars as DOTTED LINES?
       h2=plot(x, line+erro, args{:}, 'LineStyle',':',plotargs{:}); h=[h h2];
       h2=plot(x, line-erro, args{:}, 'LineStyle',':',plotargs{:}); h=[h h2];
-    elseif FILL_AREA<3 % FILLED AREA?
+    elseif FILL_AREA<3 % show error bars as FILLED AREA?
       alpha = 0.5;
       bad = isnan(x) | isnan(line) | isnan(erro) | isinf(erro) | isinf(x) | isinf(line);
       h2 = fill(  [x(~bad); flipud(x(~bad))]', ...
                   [line(~bad)+erro(~bad); flipud(line(~bad)-erro(~bad))]', ...
                   colj, 'FaceAlpha', alpha,'linestyle','none');
       h=[h h2];
-    else % QUANTILES?
+    else % if fill>=3, show QUANTILES? (see errorBarPlot code)
       errorBarPlot( sq(t_y(:,j,:)), 'xaxisvalues',nanmean( sq(t_x(:,j,:)) ) , ...
         'area',FILL_AREA,'smooth',SMOOTH,'plotargs',{'marker','.', plotargs{:}},'color',colj);
     end
@@ -384,16 +384,17 @@ else % SLIDING BIN = we have a whole curve to plot
   end
   %%%%%%% STATISTICS on sliding bin data?
   if nargout>2 % DO STATS?  treats conditions as a continuous variable
-    NS = size(Yb,1); NC = size(Yb,2); % run mixed effects permutation test
-    if nargout<5, ao={[],[],[],[]};  % did you request a figure handle? if so 
+    NS = size(Yb,1); NC = size(Yb,2);      % run mixed effects permutation test
+    if nargout<5, ao={[],[],[],[]};        % did you request a figure handle? if so 
     else          ao={[],[],[],[],[]}; end % then request a significance bar from permutationOLS.
+    % create a design matrix: column of 1s, then column of conditions (assume linear effect) 
     DES=[flat(ones(NS,NC))  zscore(flat(repmat(1:NC,[NS,1]))) ];
-    if var(DES(:,2))>0
-      [ao{:}]=permutationOLS(reshape(Yb,NS*NC,[]),...
-        DES, [0 1], ...
-        repmat([1:NS]', NC,1)  ); %%%% SHOULD THIS ME NC,1 ?  (2018)
-      p = ao{2}; t = ao{3};
-    else p=[]; t=[];
+    if var(DES(:,2))>0  % assuming there are different conditions to compare:
+      [ao{:}]=permutationOLS(reshape(t_y,NS*NC,[]),... % get list of traces over values of X
+        DES, [0 1], ...            % statistics: contrast for linear effect of conditions
+        repmat([1:NS]', NC,1)  );  % group by subject (i.e. permute conditions within subjects)
+      p = ao{2}; t = ao{3};        % p-value and t-statistic
+    else p=[]; t=[];    % only one condition - no stats possible
     end
   end
 end

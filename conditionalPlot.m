@@ -57,6 +57,9 @@ function [Xb,Yb, p,t, h, resid ]=conditionalPlot(X,Y, Nbins, varargin)
 % handle tables as inputs
 if iscell(X) & numel(X)<6 & istable(X{1}) % table form
   if numel(X)==5 % {T, 'xvar','yvar','sub','lines'}
+    if isempty(X{4}), % if 'sub' is empty, then treat it as one subject
+      X{4}='CONST';  X{1}.CONST=ones(numel(X{1}(:,1)),1);  
+    end
     sub = X{1}.(X{4}); 
     con = X{1}.(X{5});
     usub =unique(sub);
@@ -68,6 +71,9 @@ if iscell(X) & numel(X)<6 & istable(X{1}) % table form
       end
     end
   elseif numel(X)==4 % {T,X,Y,G}
+    if isempty(X{4}), % if 'sub' is empty, then treat it as one subject
+      X{4}='CONST';  X{1}.CONST=ones(length(X{1}),1);  
+    end
     sub = X{1}.(X{4}); 
     usub =unique(sub);
     for i=1:length(usub)
@@ -297,15 +303,15 @@ if NO_OVERLAP % for standard binning, we have just a couple of bins
         t_xn = t_x; % subtract off means to normalise error bars
         t_yn = t_y; % for within-subject effect
         if WITHINSUBJECTERROR == 1 % for whole subject's data
-          t_yn = bsxfun( @minus, t_yn , mean(mean(t_yn,2),3) );
+          t_yn = bsxfun( @minus, t_yn , nanmean(nanmean(t_yn,2),3) );
         elseif WITHINSUBJECTERROR == 2 % for each condition separately
-          t_yn = bsxfun( @minus, t_yn , mean(t_yn,3) );
+          t_yn = bsxfun( @minus, t_yn , nanmean(t_yn,3) );
         end
         % calculate standard error in x and y
-        ex = sq(std(t_xn(:,j,:),[],1))/sqrt(size(Xb,1)) ;
-        ey = sq(std(t_yn(:,j,:),[],1))/sqrt(size(Yb,1)) ;
-        errorbarxy(  XTRANSFORM(  sq(mean(t_x(:,j,:),1))  ), ...
-                     YTRANSFORM(  sq(mean(t_y(:,j,:),1))  ), ...
+        ex = sq(nanstd(t_xn(:,j,:),[],1))/sqrt(size(Xb,1)) ;
+        ey = sq(nanstd(t_yn(:,j,:),[],1))/sqrt(size(Yb,1)) ;
+        errorbarxy(  XTRANSFORM(  sq(nanmean(t_x(:,j,:),1))  ), ...
+                     YTRANSFORM(  sq(nanmean(t_y(:,j,:),1))  ), ...
           ex,ey ...
           ,[],[], cols(j,:)  , .2*[1 1 1]);
       else % only one subject
@@ -317,8 +323,8 @@ if NO_OVERLAP % for standard binning, we have just a couple of bins
           ,[],[], cols(j,:)  , .2*[1 1 1]);        
       end
     else            % or just plot the means
-      h2=plot(sq(mean(t_x(:,j,:),1)), ...
-        sq(mean(t_y(:,j,:),1)) ...
+      h2=plot(sq(nanmean(t_x(:,j,:),1)), ...
+              sq(nanmean(t_y(:,j,:),1)) ...
         , cols(j,:) );
       h=[h h2];
     end

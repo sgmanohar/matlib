@@ -9,6 +9,10 @@ function Y = epoch_events(X,events, varargin)
 % if X and events are matrices, then operate on each column 
 % X(:,i), event(:,i), and return a 3-dimensional array.
 % result = Y( timepoint, event, Xcolumn )
+%
+% events may be logical, in which case, the 1's indicate events. they may
+% be a (1 x n) cell array, in which case each column corresponds to a
+% column of X.
 % 
 % 'region': two-element array with [start, end]
 %   if region is supplied, then each column i of y is the data in a 
@@ -25,6 +29,9 @@ end
 for i=1:size(X,2)
   x=X(:,i); % get the column
   e=events(:,i); % get the corresponding list of events
+  if iscell(e) && numel(e)==1 % handle cell array with one item per column of X 
+    e = e{1}; 
+  end
   % is e a boolean vector of same length as data?
   if length(e)==length(x) && length(unique(e(~isnan(e))))==2
     % if so, treat it as flags for where events occur.

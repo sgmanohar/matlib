@@ -15,4 +15,12 @@ for i=1:length(names)
 end
 E.names  = names;
 E.values = 1:length(names);
+E.getIndex = @(s)find(strcmpi(names,s));
+E.getVal = @(x)getVal(x,E);
+
+function x = getVal(x,E)
+% ensure x is a valid enum - if not, convert string to number 
+if ischar(x)
+  x=E.getIndex(x);
+end
 

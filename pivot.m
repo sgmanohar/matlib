@@ -48,8 +48,15 @@ if 1
       if isnan(X(i,end)), continue; end % ignore NaNs in the data column
       catgs = X(i,1:end-1); % its category set, as a cell array
       for j=1:length(catgs) % for each category
-        catgs(j)=find(catgs(j)==uc{j}); % convert the label to index
+        if ~isnan(catgs(j))
+          catgs(j)=find(catgs(j)==uc{j},1); % convert the label to index
+        else
+          catgs(j)=nan;
+        end
       end % now catgs is a list of indices
+      if any(isnan(catgs))
+        continue;
+      end
       where = num2cell(catgs); % indexing for the category
       % increment counter for this category combination
       count(where{:})=count(where{:})+1; 

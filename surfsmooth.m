@@ -21,7 +21,7 @@ if SMOOTH && ismatrix(X) && numel(X)>30
   end
   kernel = kernel / sum(kernel(:)); % normalise to 1
   % nanconv calls conv2 under the hood. 
-  X=nanconv( X, kernel );
+  X=nanconv( X, kernel, 'edge' );
 end
 varargin{1}=X;
 h=surf(varargin{:},'EdgeColor','None');

@@ -149,7 +149,11 @@ varargin(remove)=[];
     warning('Badly formed field "%s" - ignoring',f); 
     if ALLOW_BAD_FIELDS 
       of=f; f=[f 'ForAll']; pos=strfind(f,'For');
-      [r.(f)] = deal(r.(of)); % rename the field so that it is ok
+      try
+        [r.(f)] = deal(r.(of)); % rename the field so that it is ok
+      catch mexp
+        mexp
+      end
     else
       exit=true;
     end

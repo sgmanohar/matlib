@@ -44,7 +44,7 @@ function selectedFields = browsePlotFields(r, drawfunction, varargin)
 SAVE_ALL = ~isempty(saveprefix);
 f = fieldnames(r);
 ALPHA = 0.05;
-PAUSE=true;
+PAUSE = true;
 % if this is true, then creates a new file name from the field name on each
 % graph. Otherwise, use the filename from the previous save
 DONT_PRESERVE_FILENAME = true;
@@ -56,6 +56,7 @@ EXIT=false;
 subplotFields = containers.Map;
 selectedFields = {};
 fieldsPerPage = prod(SUBPLOT); if isempty(SUBPLOT), fieldsPerPage=1; end
+page = 1;
 while ~EXIT % repeat the current graph if 'next' is false
   pauseThisTime = PAUSE;
   drawThisTime = true;
@@ -121,6 +122,7 @@ while ~EXIT % repeat the current graph if 'next' is false
           pauseThisTime = false; % carry right on to next plot
         else
           subplotIndex  = 1; % otherwise pause, and start back at top of next page
+          page = page + 1;
         end
       end
     end
@@ -169,6 +171,10 @@ while ~EXIT % repeat the current graph if 'next' is false
         key=[]; % don't carry on - stay on same graphs
       end
       
+      if any(key=='w') && drawThisTime
+        export_fig_pdf(sprintf('plotfield_p%02g',page));
+      end
+      
       
       if key=='f' % change filter
         filter=input(sprintf('filter "%s" -> ', filter));
@@ -197,7 +203,13 @@ while ~EXIT % repeat the current graph if 'next' is false
       % if clicked on graph, store selcted graph.
       if any(key<4) 
         if SUBPLOT
-          selectedFields = [selectedFields subplotFields(num2str(gca))];
+          ax=gca;
+          if isnumeric(ax) % old matlab
+            selectedFields = [selectedFields subplotFields(num2str(gca))];
+          else % new matlab
+            ha=DataHash(ax.Position);
+            selectedFields = [selectedFields subplotFields(ha)];
+          end
         else selectedFields = [selectedFields i]; end
       end 
       if any(key>3) || ~pauseThisTime,        i=i+1;   end

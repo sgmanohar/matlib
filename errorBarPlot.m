@@ -3,8 +3,8 @@ function varargout = errorBarPlot(X, varargin)
 %   X is an array
 %     Plot with within-subject standard error bars. 
 %     Means are taken over dimension 1.
-%   X is a cell array { Table, 'yvar',  'xvar' ,  'grouping' , 'linesvar'  }
-%     grouping and linesvar are optional. 
+%   X is a cell array { Table, 'yvar',  'grouping' , 'xvar' , 'linesvar'  }
+%     grouping and linesvar are optional, eg: { T, Y, X } or { T, Y, G, X } 
 %     If grouping is present, means are taken for each group, and the 
 %       error bars will reflect the groupings (e.g. subjects). If not, error
 %       bars are across all rows that match a level of xvar.
@@ -16,6 +16,7 @@ function varargout = errorBarPlot(X, varargin)
 %                2 = use dotted lines for min and max of std error. 
 %                3 or greater: show Quantiles. 3=[.33 to .66], 4=[.25 to .75],
 %                  5=[.2 to .8, and .4 to .6], etc. Note: median used, meanfun ignored. 
+%               -1 = 'Violin' plot, one-sided; -2 = symmetrical area.
 %           'alpha': after area - use an alpha for call to 'fill' when
 %                plotting . Default 0.5
 %           'xaxisvalues': specify the x-values of the graph. Otherwise
@@ -25,13 +26,14 @@ function varargout = errorBarPlot(X, varargin)
 %                dimension 2 or 3 of the data.
 %                subtract the mean for that dimension from all values
 %                before averaging and taking std error. then add on the
-%                mean before plotting.%           'withinSubjectError' - subtract subjects' intercepts before
+%                mean before plotting.
+%           'withinSubjectError' - subtract subjects' intercepts before
 %                calculating error bars. Default 0.
 %           'standardError': 1 = use SEM for error bars (default).
-%                0 = calculate bootstrapped confidence intervals at p=0.05.
-%                    In that case, also specify 'nBoot' = num permutations.
 %                2 = use standard deviation
 %                between 0 and 0.5: use percentile above and below median
+%                otherwise : calculate bootstrapped confidence intervals at p=0.05.
+%                    In that case, also specify 'nBoot' = num permutations.
 %           'width':  adjust the width of the errorbars. needs 'errorbarT.m'
 %               function (download from Matlab Central)
 %           'type': 'line' (default) or 'bar'. Note, 'area' only works with
@@ -77,6 +79,7 @@ DOTTED_AREA = AREA==2; % use dotted line above and below, instead of area plot
 
 if ~isempty(COLOR), plotargs=[plotargs {'color',COLOR}]; end
 
+%%% HANDLE TABLES AS INPUT
 if iscell(X) && isa( X{1}, 'table' ) % convert table to array
   % handle three possible formats of the variables:
   if numel(X)==3 % { T, Y, X }
@@ -84,7 +87,7 @@ if iscell(X) && isa( X{1}, 'table' ) % convert table to array
     tmp = pivot(tmp)';
     LABELS = X([3,2]); % X and Y label
   elseif numel(X)==4 % { T, Y, G, X }
-    tmp = [ X{1}.(X{3}) X{1}.(X{4}) X{1}.(X{2}) ]; % [G, X, Y]
+    tmp = [ double(X{1}.(X{3})) double(X{1}.(X{4})) double(X{1}.(X{2})) ]; % [G, X, Y]
     tmp = pivot(tmp);
     tmp = sq(nanmean(tmp, ndims(tmp))); % take means within groups
     % tmp = permute(tmp, [2,1]); % tmp( group, xvar )
@@ -98,6 +101,35 @@ if iscell(X) && isa( X{1}, 'table' ) % convert table to array
   else error('please provide names of two or three table columns.');
   end
   X=tmp;
+end
+
+%%% HANDLE LME OBJECT AS INPUT
+if isa(X,'LinearMixedModel') 
+  C=X.Coefficients;                    % get coefficients
+  if strcmpi(C.Name(1),'(Intercept)'), % ignore intercept
+    C = C(2:end,:);
+  end
+  barwitherr(C.SE,  C.Estimate);       % plot bar with error
+  set(gca,'XTick',1:length(C.SE));     % all bars labelled
+  set(gca,'XTickLabel',C.Name);        % label x axis
+  tmp=gca; if isprop(tmp,'XTickLabelRotation')
+    tmp.XTickLabelRotation = 45;
+  end
+  % y location to draw asterisks: 95% of height
+  yl = ylim; ht=yl(2); dh = 0.05*(yl(2)-yl(1)); 
+  for i=1:size(C,1)    % for each coefficient
+    if C.pValue(i) < 0.05 % is it significant?
+      text(i, ht-dh , '*'); 
+      text(i, ht-2*dh+(dh/2)*(-1)^i, sprintf('p=%0.2f',C.pValue(i)));
+    end
+  end
+  return;
+end
+
+% check data looks 'paired'
+if size(X,1)>5 && any(any(all(isnan(X(end-5:end,:,:)),1)))
+  warning('data looks unpaired. error bars will be between-subjects')
+  WITHINSUBJECTERROR = false;
 end
 
 sx=size(X); 
@@ -140,7 +172,7 @@ if STANDARD_ERROR==1 % standard error calculation
 elseif STANDARD_ERROR ==2 % use standard deviation?
   yerror  = sq(sqrt(nanvar(Xm,[],1)));
   yerrorm = yerror;
-elseif STANDARD_ERROR < 0.5 % treat fraction as percentile for bar
+elseif STANDARD_ERROR < 0.5 && STANDARD_ERROR > 0 % treat fraction as percentile for bar
   yerror  =   quantile(Xm, 0.5+STANDARD_ERROR) - fmean(Xm);
   yerrorm = -(quantile(Xm, 0.5-STANDARD_ERROR) - fmean(Xm));
 else              % bootstrap confidence interval at 5%
@@ -213,10 +245,10 @@ else % AREA plot
         bad = isnan(yy);
         xx(bad)=[]; yy(bad)=[]; % simply remove nans from the polygon
         if isempty(yy) warning('line %g omitted because no data',i); continue; end
-        h(i,2)=fill(xx ,yy, coli, 'linestyle','none','FaceAlpha',alpha);
+        h{i,2}=fill(xx ,yy, coli, 'linestyle','none','FaceAlpha',alpha);
         hold on;
         % plot mean line on top of area
-        h(i,1)=plot( xav, xm, 'color', coli,'linewidth',1.5,plotargs{:} );
+        h{i,1}=plot( xav, xm, 'color', coli,'linewidth',1.5,plotargs{:} );
       elseif AREA>2 % AREA > 2 ==> QUANTILES
         % number of quantiles to calculate
         nquant = AREA; % AREA=3 gives 0.33,.67, AREA=4 gives .25,.75 etc.
@@ -238,17 +270,23 @@ else % AREA plot
         dxav = mean(diff(xav)); % difference in x axis values = scale of pdf
         xm = fmean(Xm(:,:,i));   % calculate mean
         yav=linspace(-2.5*yerror, 2.5*yerror, 30);
-        for k=1:size(xav,1)
-          xx=xav(k)+dxav*normpdf(yav(k,:)',0,yerror(k));
-          yy=yav(k,:)'+xm(k);
-          if AREA==-1
-            yy=[yy;yy(1)]; xx=[xx;xx(1)];
-          elseif AREA==-2
-            yy=[yy; flipud(yy)]; xx=[xx;xav(k)-flipud(xx-xav(k))];
-          end
-          h(i,k) = fill( xx, ...
-                         yy,  coli, 'linestyle','none','FaceAlpha',alpha ); 
-                       hold on
+        for k=1:size(xav,1) % for each x-point, 
+          %xx=xav(k)+dxav*normpdf(yav(k,:)',0,yerror(k));
+          %yy=yav(k,:)'+xm(k);
+          [xx,yy]=ksdensity(Xm(:,k,i)); % estimate the PDF using kernel smoothed density
+          dyav = yy(end)-yy(1); % difference in y values over support of distribution
+          % calculate the horizontal position & scaling. account for the
+          % density being dependent on the y-scaling. area = 1/10th of
+          % inter-xval rectangle of support.
+          xx = dxav * xx * dyav / 10 + xav(k);  
+          if AREA==-1   % one-side: flat left edge
+            yy=[yy';yy(1)]; xx=[xx';xx(1)];
+          elseif AREA==-2 % two-sides: mirror like a violin
+            yy=[yy'; flipud(yy')]; xx=[xx';xav(k)-flipud(xx'-xav(k))];
+          end % now draw the fill:
+          h(i,k) =  fill(xx,yy, ...
+                         coli, 'linestyle','none','FaceAlpha',alpha ); 
+          hold on
         end
         h(i,1)=plot( xav, xm, 'color', coli,'linewidth',1.5,plotargs{:} );
       end
@@ -270,24 +308,45 @@ end
 
 if isempty(DO_STATS)  % do stats was not specified. 
   if all(sx(2:end)<5),   DO_STATS = true;  % do stats only if few datapoints
-  else                   DO_STATS = false;
+  else
+    if AREA, DO_STATS = true; 
+    else     DO_STATS = false;
+    end
   end
   if any(sx==1),         DO_STATS = false; end
 end    
 if DO_STATS
-  stat = rmanova(X, STAT_ARGS{:});   % use simple repeated measures anova
-  txt='';
-  for row=2:size(stat.pValue) % plot each p value
-    txt_r  = sprintf('F(%g,%g)=%0.3g,p=%0.3g', stat.DF1(row), stat.DF2(row), ...
-      stat.FStat(row), stat.pValue(row) );
-    if stat.pValue(row)<0.05, txt_r=[txt_r ' *']; end
-    if isempty(txt),  txt = txt_r;
-    else              txt = [txt char(10) txt_r];
+  try
+    if ~AREA % non-area? use rm-ANOVA for stats
+      stat = rmanova(X, STAT_ARGS{:});   % use simple repeated measures anova
+      txt='';
+      for row=2:size(stat.pValue) % plot each p value
+        txt_r  = sprintf('F(%g,%g)=%0.3g,p=%0.3g', stat.DF1(row), stat.DF2(row), ...
+          stat.FStat(row), stat.pValue(row) );
+        if stat.pValue(row)<0.05, txt_r=[txt_r ' *']; end
+        if isempty(txt),  txt = txt_r;
+        else              txt = [txt char(10) txt_r];
+        end
+      end
+      text(0.5,0.9, txt, 'Units','normalized', ...
+        'HorizontalAlignment','center', 'VerticalAlignment','Top', 'editing','on');
+    else % area? use permutation OLS
+      NS = size(X,1); Nx = size(X,2); NC = size(X,3);
+      if NC>2, warning('testing linear effect of condition'); end
+      [stat.htest, stat.p_vals, stat.t_stat, stat.t_thresh, hplot] = permutationOLS(...
+        reshape( permute(X,[1,3,2]),NS*NC,[]),... put x-values on dim 2, and subj x cond on dim 1
+        [ ones(NS*NC,1), kron(zscore(1:NC),ones(1,NS))' ], [0 1], ...
+        repmat([1:NS]', NC,1)  );
+      h={h hplot};
     end
+  catch mx
+    fprintf('unable to do statistics:\n');
+    disp(mx);
   end
-  text(0.5,0.9, txt, 'Units','normalized', ...
-    'HorizontalAlignment','center', 'VerticalAlignment','Top', 'editing','on');
 end
 if nargout > 0       % do we need to return the figure object handles?
   varargout{1} = h;
+end
+if nargout > 1
+  varargout{2} = stat;
 end

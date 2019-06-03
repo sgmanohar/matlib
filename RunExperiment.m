@@ -156,6 +156,7 @@ ex.R_UNSPECIFIED  = -94;            % experiment didn't provide a return value
 % Store the stack trace - so we know which .m experiment file was run 
 % to execute the experiment
 ex.experimentStack= dbstack;        
+fatal_error       = 0;              % true if the task must end suddenly
 % Store the file record for top-level function (i.e. experiment) 
 %  - includes the modification date and size! (2018) 
 ex.experimentFile = dir(which(ex.experimentStack(end).file)); 
@@ -291,7 +292,6 @@ try
     end;
     result.trials = trials;     % save trial structure in output
     result.params = ex;         % save experimental parameters in output
-    fatal_error   = 0; 
 
     % call experiment start code, if provided
     if exist('exptStart')
@@ -300,10 +300,14 @@ try
 
     % Practice trials
     % if there are practice trials, and we're not continuing from before:
-    if isfield(ex,'practiceTrials') && prod(last)==1 
+    if isfield(ex,'practiceTrials') && ex.practiceTrials>0 && prod(last)==1 
         % create a new set of random trials for the practice, in the same way as
         % would be done for the real experiment. 
-        ex_prac = rmfield(ex,'blockorder'); 
+        if isfield(ex,'blockorder')
+          ex_prac = rmfield(ex,'blockorder');
+        else
+          ex_prac = ex;
+        end
         ex_prac.blocks = 1; 
         ex_prac.blockLen = ex.practiceTrials; 
         if isfield(ex, 'shufflePracticeTrials')

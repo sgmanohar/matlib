@@ -79,7 +79,12 @@ for i=1:size(x,length(DIM)+1)
   M = x(colons{:},i);
   if ~CONV
     if ~COMB
-      y(colons{:},i) = f(M);
+      tmp = f(M);
+      if numel(tmp)>0
+        y(colons{:},i) = tmp;
+      else
+        y(colons{:},i) = nan;
+      end
     else % all combinations for a particular dimension
       allsel = repmat({':'},length(DIM),1);
       for j=1:S(DIM(COMB))
@@ -112,7 +117,7 @@ for i=1:size(x,length(DIM)+1)
     end
   end
 end
-
+if ~exist('y','var'), y=[]; end
 % reshape the irrelevant dimensions back
 Sy   = size(y);
 newS = S(neword); newS(1:length(DIM)) = Sy(1:length(DIM));

@@ -41,7 +41,7 @@ if ndims(T)>2 || ... % if the data is multidimensional, or if it is a table
 end
 
 T(:,[2:end-1]) = nanzscore(T(:,[2:end-1])); % zscore the factor columns
-constcol = find(nanvar(T)==0); % any constant columns?
+constcol = find(nanvar(T(:,1:end-1))==0); % any constant columns?
 if any(constcol)
   warning('Intercept present by default, so constant terms removed');
   T(:,constcol)=[];

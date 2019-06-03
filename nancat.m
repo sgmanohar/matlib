@@ -100,12 +100,14 @@ for(i=2:length(varargin)) % for each operand
     end % ensure same number of dimensions.
     uneqdim = find(~(sizeV==sizeC)); % for each of the unequal dimensions
     for(j=1:length(uneqdim))
+        sizeC=size(C); sizeV=size(v); % Sgm 2019 - sizes may have changed!
         if uneqdim(j)==DIM; continue; end % (except for the one you're catting along)
         d=uneqdim(j);
         if(sizeC(d)>sizeV(d)) % V is too small: add nans to d if it's shorter
             diff= sizeC(d)-sizeV(d); % difference in size along dimension d
             addsize=sizeV;  
             addsize(d)=diff; 
+            addsize(addsize==0)=1; % sgm 2019
             if(alignend)   v=cat(d, makepadding( addsize ), v);
             else           v=cat(d, v, makepadding( addsize ));
             end

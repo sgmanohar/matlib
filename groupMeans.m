@@ -72,6 +72,11 @@ function [mu, resid] = groupMeans( X, DIM, categ , meanfunc )
 saveix_extend = false; % extend by one dimension, by expanding the cell afterwards
 meanIsCell    = false; % concatenate result as cells rather than matrix
 
+if isempty(X) 
+  warning('data to groupMeans is empty');
+  mu=[]; return
+end
+  
 
 if isscalar(X) && isinteger(X) % did you swap the Dimension and Data parameters?
   tmp=X;X=DIM;DIM=tmp;
@@ -174,7 +179,8 @@ if (isnumeric(categ) || islogical(categ)) && isvector(categ)
       resid(searchix{:}) = bsxfun(@minus, resid(searchix{:}), mu(saveix{:}) );
     end
   end
-elseif islogical(categ)
+elseif islogical(categ) && size(categ,2) ~= size(X,2)
+  warning('treating category as boolean selectors')
   for i=1:size(categ,2) % for each column of categ
     searchix      = all_indices;
     searchix{DIM} = categ(:,i);

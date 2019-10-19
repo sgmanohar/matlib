@@ -41,6 +41,8 @@ DEMEAN_Y_BY_COLUMN = true; % align each column's Y-values to the same mean?
 DENSITY  = 0;
 SHOW_ZERO = 1; % plot dotted lines at 'zero-zero', if within the axis
 ALPHA    = 0.05; % significance threshold for plotting confidence intervals
+SCATTERFUN = @scatter; % @scatterhist; 
+
 
 i=find(strcmpi(varargin,'pearson'));
 if i, PEARSON=varargin{i+1}; varargin([i i+1])=[]; end
@@ -67,6 +69,11 @@ if ~exist('Y','var') || ~isnumeric(Y)
   elseif size(X,2)==3 && ndims(X==2)
     Y=X(:,2);X=X(:,1);varargin=[{X(:,3)} varargin];
   end
+  XLABEL=[inputname(1) '(:,1)']; 
+  YLABEL=[inputname(1) '(:,2)'];
+else
+  XLABEL=inputname(1); 
+  YLABEL=inputname(2); 
 end
 
 ohold=ishold();
@@ -128,7 +135,7 @@ else % 2D data
     handles = [];
     for i=1:size(Yall,2) % do each column of Y separately
       Y=Yall(:,i); % select column
-      h=scatter(X,Y, varargin{:});
+      h=SCATTERFUN(X,Y, varargin{:});
       handles=[handles h];
       [b bint r rint stats] = regress(Y(:), [X(:), ones(size(Y(:)))]);
       if PEARSON
@@ -175,4 +182,6 @@ end
 if SHOW_ZERO && prod(ylim)<0
   plot(xlim,[0 0],':');
 end
+if ~isempty(XLABEL), xlabel(deCamel(XLABEL)); end
+if ~isempty(YLABEL), ylabel(deCamel(YLABEL)); end
 if(~ohold) hold off; end;

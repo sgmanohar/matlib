@@ -31,6 +31,8 @@ function Y = apply(f,X,varargin)
 %   length(DIM)), that combinations are taken over.
 %   e.g. apply( [1 2], @(x,y)corr(x,y), X, 'COMB',2 )
 %   calls corr on each pair of columns of X.
+% 'IgnoreErrors': if true, then if the function returns an error,
+%   insert nan ( or the value specified by 'PadErrors' )
 
 
 % which dimension(s) to pass to the function
@@ -43,7 +45,7 @@ if isnumeric(f) && numel(f)<5 && all(floor(f)==f) ...
   DIM=f; f=X; X=varargin{1}; varargin=varargin(2:end);
 end
 
-i=find(strcmp(varargin,'conv'));
+i=find(strcmpi(varargin,'conv'));
 if numel(i)==1
   CONV = varargin{i+1};
   varargin(i:i+1)=[];
@@ -51,7 +53,7 @@ if numel(i)==1
 else
   CONV = false;
 end
-i=find(strcmp(varargin,'comb'));
+i=find(strcmpi(varargin,'comb'));
 if numel(i)==1
   if CONV, error('conv and comb cannot be used together'); end
   COMB = varargin{i+1};
@@ -60,6 +62,30 @@ if numel(i)==1
 else
   COMB = false;
 end
+
+i=find(strcmpi(varargin,'cell'));
+if numel(i)==1
+  if CONV, error('conv and cell cannot be used together'); end
+  CELL = varargin{i+1};
+  varargin(i:i+1)=[];
+else
+  CELL = false;
+end
+
+i=find(strcmpi(varargin,'IgnoreErrors'));
+if numel(i)==1
+  IGNORE_ERRORS = varargin{i+1};
+  varargin(i:i+1)=[];
+else
+  IGNORE_ERRORS = false;
+end
+PAD_ERRORS = nan;
+i=find(strcmpi(varargin,'PadErrors'));
+if numel(i)==1
+  PAD_ERRORS = varargin{i+1};
+  varargin(i:i+1)=[];
+end
+
 
 % original size
 S = size(X); 
@@ -73,17 +99,43 @@ xp = permute(X, neword);
 Sa = num2cell(S);
 x = reshape(xp,Sa{DIM},[]);
 % a set of colons, for passing the correct dimensions of x to function
-colons = repmat({':'}, length(DIM),1);
+colons     = repmat({':'}, length(DIM),1);
+colons_out = colons; 
 for i=1:size(x,length(DIM)+1)
   % extract a subarray for only the dimensions DIM
   M = x(colons{:},i);
   if ~CONV
     if ~COMB
-      tmp = f(M);
+      try
+        tmp = f(M);
+      catch mexp
+        if IGNORE_ERRORS
+          tmp = PAD_ERRORS;
+        else
+          fprintf('apply: use IgnoreErrors = 1 to insert nans for errors\n')
+          rethrow(mexp);
+        end
+      end
       if numel(tmp)>0
-        y(colons{:},i) = tmp;
+        % do we have the same number of output dimensions as the result?
+        if length(colons_out) ~= ndims1(tmp) 
+          if i==1
+            colons_out = repmat({':'}, ndims1(tmp),1); 
+          else
+            error('function returns different-sized outputs');
+          end
+        end
+        if CELL 
+          y{colons_out{:},i} = tmp;
+        else
+          y(colons_out{:},i) = tmp;
+        end
       else
-        y(colons{:},i) = nan;
+        if CELL
+          y{colons_out{:},i} = nan;
+        else
+          y(colons_out{:},i) = nan;
+        end
       end
     else % all combinations for a particular dimension
       allsel = repmat({':'},length(DIM),1);
@@ -98,25 +150,52 @@ for i=1:size(x,length(DIM)+1)
   else % convolution along requested dimensions
     if length(DIM)==1 % M is a vector
       for j=1:S(DIM)-CONV
-        y(j,i) = f(M(j:j+CONV));
+        try
+          y(j,i) = f(M(j:j+CONV));
+        catch mexp
+          if IGNORE_ERRORS
+            y(j,i) = PAD_ERRORS;
+          else
+            fprintf('apply: use IgnoreErrors = 1 to insert nans for errors\n')
+            rethrow(mexp);
+          end
+        end
       end
     elseif length(DIM)==2 % M is a matrix
       for j=1:S(DIM(1))-CONV(1)
         for k=1:S(DIM(2))-CONV(2)
-          y(j,k,i) = f(M(j:j+CONV(1), k:k+CONV(2)));
+          try
+            y(j,k,i) = f(M(j:j+CONV(1), k:k+CONV(2)));
+          catch mexp
+            if IGNORE_ERRORS
+              j(j,k,i) = PAD_ERRORS;
+            else
+              fprintf('apply: use IgnoreErrors = 1 to insert nans for errors\n')
+              rethrow(mexp);
+            end
+          end
         end
       end
     elseif length(DIM)==3
       for j=1:S(DIM(1))-CONV(1)
         for k=1:S(DIM(2))-CONV(2)
           for l=1:S(DIM(3))-CONV(3)
-            y(j,k,l,i) = f(M(j:j+CONV(1), k:k+CONV(2), l:l+CONV(3)));
-          end
-        end
-      end
-    end
-  end
-end
+            try
+              y(j,k,l,i) = f(M(j:j+CONV(1), k:k+CONV(2), l:l+CONV(3)));
+            catch mexp
+              if IGNORE_ERRORS
+                y(j,k,l,i) = PAD_ERRORS;
+              else
+                fprintf('apply: use IgnoreErrors = 1 to insert nans for errors\n')
+                rethrow(mexp)
+              end
+            end % end try
+          end % next l
+        end % next k
+      end % next j
+    end % if DIM
+  end % CONV?
+end % next i
 if ~exist('y','var'), y=[]; end
 % reshape the irrelevant dimensions back
 Sy   = size(y);

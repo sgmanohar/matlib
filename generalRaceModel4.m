@@ -213,18 +213,19 @@ end
     
     % deal with start-time by compensating the initial value of accumulator
     % (a bit hacky!)
-    A = A - p.startTime ./ R;
+    A = A - p.startTime .* R;
     % sequential step times and response types
     seqt=nan(N,20); seqtrig=nan(N,20);
     allEnded=0;
     timegapbefore = p.startTime; % delay first signal by startTime
+    timegapbefore = 0;
     iter = 0;
     
     % calculate time for each signal to reach threshold
     while ~allEnded
         iter = iter + 1;
-        tsig = (p.threshold - A) ./ R + timegapbefore;   
-        tsig(tsig<eps)=inf;        % processes with negative/zero rate never cross threshold
+        tsig = (p.threshold - A) ./ R ;   
+        %tsig(tsig<eps)=inf;        % processes with negative/zero rate never cross threshold
         tsig(R<eps)   =inf;
         % if all( Y>0 | all(tsig,2)==inf ) break;end; % exit if all either complete or nonterminating
         if all( all(tsig,2)==inf ) break;end; % exit if all either complete or nonterminating
@@ -247,7 +248,7 @@ end
         % change this if a delay is needed between stages of a process
         nochange = isnan(newR) | ... % when not to change trigger: nan trigger
                    repmat(t==inf | isnan(t),1,NS) | ... triggering process does not complete
-                   processCompleted | ...;  % process to be triggered has already completed
+                   ... processCompleted | ...;  % process to be triggered has already completed
                    repmat([1:NS],N,1)==repmat(iTrig,1,NS); % process to be triggered is also the triggerer
         switch p.mode 
             case SET_RATE
@@ -274,6 +275,7 @@ end
         seqtrig(:,iter) = iTrig; %  columns are timepoints, rows are trials
         indComplete = sub2ind([N,NS], [1:N]', iTrig);
         processCompleted( indComplete(~isnan(indComplete)) ) = true;
+        R(processCompleted) = -inf; % completed processes - stop!
         Y = Y + (Y==0) .* r;     % change first response if it was zero
         T=T+t;                  % increment cumulative time
         seqt(:,iter) = T; 

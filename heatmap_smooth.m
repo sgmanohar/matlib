@@ -7,11 +7,12 @@ function varargout=heatmap_smooth(X,varargin)
 %   contourf( hist3( X ) )
 % plot heatmap of paired X,Y data. 
 %
-% params:   'windows',  [ ngridX, ngridY ]
+% params:   'windows',  [ ngridX, ngridY ]  or  { centresX(:), centresX(:) }
 %       or  'smooth',   gaussian width
 %           'kernel',   'gauss' or 'flat'
 %           'plotargs',  extra arguments passed to contourf.
 %           'contour',   if false, just plot as squares
+%           'transform', apply transform to the probability density (e.g. log) 
 % sgm 2014
 
 if isvector(X) && nargin>1 && all(size(varargin{1})==size(X))
@@ -19,13 +20,13 @@ if isvector(X) && nargin>1 && all(size(varargin{1})==size(X))
   varargin(1)=[];
 end
   
-[KERNEL D SM plotargs, CONTOUR] =parsepvpairs({
-  'kernel','windows','smooth','plotargs','contour' },{
-  'gauss',  [] ,  [] , {}, true}, varargin{:});
+[KERNEL D SM plotargs, CONTOUR, TRANSFORM] =parsepvpairs({
+  'kernel','windows','smooth','plotargs','contour', 'transform' },{
+  'gauss',  [] ,  [] , {}, true, [] }, varargin{:});
 
-if isscalar(D) 
+if isnumeric(D) 
   if isscalar(D), D=[D D]; end
-else
+elseif ~iscell(D)
   D = [1 1] * floor(sqrt(length(X))); 
 end
 if isempty(SM), SM=floor(D(1)/10);end;
@@ -35,6 +36,10 @@ if isempty(SM), SM=floor(D(1)/10);end;
 % SM = floor(D/WINDOWS); 
 
 [h , c]= hist3(X,D); 
+if ~isempty(TRANSFORM)
+  h=TRANSFORM(h);
+end
+
 if SM
   switch KERNEL
     case 'gauss'
@@ -59,7 +64,8 @@ if CONTOUR
   end
 
 else
-  ht=imagesc(flipud(h)');                           % show heatmap
+  ht=imagesc(c{1},c{2},h');                           % show heatmap
+  set(gca,'ydir','normal');                 % up is up!
   xt=get(gca,'xtick');
   yt=get(gca,'ytick');                      % set axes scales
   if all( xt==floor(xt) & xt>0 ) && all( yt==floor(yt) & yt>0 )

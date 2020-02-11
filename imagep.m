@@ -13,9 +13,21 @@ function varargout = imagep(p, ylabels, xlabels,varargin)
 % sgm 2012
 ALPHA  = 0.05;
 ROTATE = true; % make x axis labels run vertically?
+
+if length(size(p))==3
+  % is this multidimensional? if so use first dimension for t-test against
+  % zero, and do permutation correction to obtain p value.
+  sz = size(p);
+  p=reshape( p, sz(1), [] ); % collapse image dimensions
+  p( all(isnan(p),2), : ) = []; % remove any rows with all nan
+  [~,p]=permutationOLS(p);
+  p=reshape(p, sz(2:end));
+end
+
 sign=(p>0)-(p<0); p=abs(p); % keep track of sign
 sign(sign==0)=1; % p-values of zero are taken to be +0.00001
-if any(p(:)< ALPHA), p(p>ALPHA)=1; end
+% are any of the nonzero p-values significant? if so, threshold image at p=0.05
+if any(p(p>0)< ALPHA), p(p>ALPHA)=1; end % otherwise plot all values
 if 0
   p(p<eps)=eps; % log(0) = inf, so use log(eps) instead -- gives approximately 16.
 else

@@ -23,15 +23,21 @@ NQ=SUBDIV*NB; % number of quantiles for the q plot = number of grid lines
 [~, ~,bx1]=plotBinsQuantiled(Y,X, NQ, 'doplot',0, 'Bins',NB); 
 [~, ~,by2]=plotBinsQuantiled(X,Y, NQ, 'doplot',0, 'Bins',NB);
 
+bx1 = nanmean(bx1,3); % mean across subjects, if supplied
+by2 = nanmean(by2,3);
+
 if NQ>10
   gausskern = exp(-bsxfun(@plus, [-SM:SM].^2/SM, [-SM:SM]'.^2/SM));
   gausskern = gausskern/sum(gausskern(:));
-  bx1=conv2(bx1, gausskern,'valid');
-  by2=conv2(by2, gausskern,'valid');
+  bx1 = nanconv(bx1, gausskern,'same');
+  by2 = nanconv(by2, gausskern,'same');
 end
 
 ish=ishold();
 NB=size(bx1,2);
+
+
+
 for i=1:NB; 
   plot(bx1(:,i),by2(i,:), plotargs{:}); hold on; 
 end; 

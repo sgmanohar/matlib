@@ -24,11 +24,11 @@ function varargout = plotn(X,Y, varargin)
 %              solid, dashed and dotted lines for dimension 3.
 %   fixshape:  don't re-arrange dimensions
 %   scale:     if true, then make subplot scales equal, and don't repeat
-%              legends. default true.
+%              legends. default true unless 'subplot' specified.
 %   threed:    if true, then pass 3D array (the first 3 dimensions of Y)
 %              to the plot function.  Useful for errorBarPlot, for example.
 %   subplot:   false = prevent creation of subplots. Only useful for
-%              when using linestyles 
+%              when using linestyles. use @subaxis for larger panels. 
 % 
 % return: a 3- or 4-dimensional array of line handles,  similar to plot. 
 % at the end of the function, ths last axes is the currently active subplot
@@ -37,7 +37,7 @@ function varargout = plotn(X,Y, varargin)
 %%%% Parse args
 if ~exist('Y','var') % only 1 param supplied
   Y=X; X=[];
-elseif isstr(Y) % no X value, only arg list
+elseif ischar(Y) % no X value, only arg list
   varargin=[{Y} varargin]; % Y is first element of arg list
   Y=X; X=[];
 end
@@ -69,27 +69,37 @@ if i
 else linestyle=[];
 end
 
+FIXSHAPE = false; % prevent rearranging the dimensions for a better view?
+THREED   = false; % send three dimensional slices to the plot-function?
+
 i=find(strcmpi(varargin, 'plotfun'));
 if i
   plotfun=varargin{i+1};
-  if ischar(plotfun) plotfun=eval(['@' plotfun]); end
+  if ischar(plotfun) 
+    if strcmpi(plotfun,'errorbarplot')  % for errorbarplot, override the default parameters
+      plotfun = @(x,varargin)errorBarPlot(x,'dostats',0,'area',1,varargin{:}); 
+      FIXSHAPE = true; THREED = true; 
+    else
+      plotfun=eval(['@' plotfun]);
+    end
+  end
   varargin(i:i+1)=[];
 else plotfun=@plot;
 end
+
 i=find(strcmpi(varargin, 'threed'));
 if i
   THREED = varargin{i+1};  % should we pass 3D data to the plot fun?
   varargin(i:i+1)=[];
-else
-  THREED = false; % otherwise pass only 2D data
+  % otherwise pass only 2D data
 end
 
 i=find(strcmpi(varargin, 'fixshape'));
 if i
   FIXSHAPE=varargin{i+1};
   varargin(i:i+1)=[];
-else FIXSHAPE=false;
 end
+
 
 i=find(strcmpi(varargin, 'scale'));
 if i
@@ -102,7 +112,14 @@ i=find(strcmpi(varargin, 'subplot'));
 if i
   SUBPLOT=varargin{i+1};
   varargin(i:i+1)=[];
-else SUBPLOT=true;
+  if ~strcmp(class(SUBPLOT),'function_handle')
+    if SUBPLOT, SUBPLOT=@subplot
+    else        SUBPLOT=@(i,j,k)0;
+    end
+  else
+    % SCALE = 0; % avoid rescaling if using a subplot function?
+  end
+else SUBPLOT=@subplot;
 end
 
 % check data format
@@ -127,9 +144,11 @@ end
 if isempty(linestyle) % no linestyles; dim 2=lines, dim3/4 = subplots
   for i=1:sz(3+THREED)  % rows of subplots
     for j=1:sz(4+THREED)   % columns of subplots
-      if SUBPLOT
-        subplot(sz(3+THREED),sz(4+THREED), (i-1)*sz(4+THREED)+j);
-      else isheld=ishold; hold on; end
+      if strcmp(class(SUBPLOT),'function_handle') 
+        SUBPLOT(sz(3+THREED),sz(4+THREED), (i-1)*sz(4+THREED)+j);
+      else
+        isheld=ishold; hold on; 
+      end
       if ~THREED
         indx = {':',':',i,j};     % select 2D slice of Y.
       else
@@ -142,11 +161,11 @@ if isempty(linestyle) % no linestyles; dim 2=lines, dim3/4 = subplots
         end
         hij = plotfun(x,Y(indx{:}), varargin{:});
         if ~isempty(hij), hij=hij(1); else hij=nan; end
-        h(:,i,j) = hij(1);
+        h{:,i,j} = hij(1);
       else
         hij = plotfun(Y(indx{:}), varargin{:});
         if ~isempty(hij), hij=hij(1); else hij=nan; end
-        h(:,i,j) = hij(1);
+        h{:,i,j} = hij(1);
       end
       if ~isempty(titlefun)
         title(titlefun(i,j));
@@ -165,13 +184,13 @@ if isempty(linestyle) % no linestyles; dim 2=lines, dim3/4 = subplots
       end
     end
   end
-  if SCALE, makeSubplotScalesEqual(sz(3+THREED),sz(4+THREED)); end
+  if SCALE, makeSubplotScalesEqual(sz(3+THREED),sz(4+THREED),[],[],'subplot',SUBPLOT); end
 else % use linestyles as dimensnion 3; subplots are dim 4/5
   if length(sz)==4+THREED, sz(5+THREED)=1; end % need 5 dimensions
   if sz(3+THREED) > length(linestyle), warning('Please provide %g line styles for dimension 3',sz(3)); end
   for i=1:sz(4+THREED)  % rows of subplots
     for j=1:sz(5+THREED)   % columns of subplots
-      if SUBPLOT
+      if strcmp(class(SUBPLOT),'function_handle') 
         subplot(sz(4+THREED),sz(5+THREED), (i-1)*sz(5+THREED)+j);
       else isheld=ishold; hold on; end
       for k=1:sz(3+THREED) % for each line style
@@ -193,9 +212,9 @@ else % use linestyles as dimensnion 3; subplots are dim 4/5
             x=X(indx{:});
           else x=X;
           end
-          h(:,i,j,k)=plotfun(x,Y(indx{:}), lsargs{:}, varargin{:});
+          h{:,i,j,k}=plotfun(x,Y(indx{:}), lsargs{:}, varargin{:});
         else
-          h(:,i,j,k)=plotfun(Y(indx{:}), lsargs{:}, varargin{:});
+          h{:,i,j,k}=plotfun(Y(indx{:}), lsargs{:}, varargin{:});
         end
         if ~isempty(titlefun)
           title(titlefun(i,j));
@@ -219,9 +238,9 @@ else % use linestyles as dimensnion 3; subplots are dim 4/5
       end
     end % next j
   end % next i
-  if SCALE && SUBPLOT, makeSubplotScalesEqual(sz(4+THREED),sz(5+THREED)); end    
+  if SCALE, makeSubplotScalesEqual(sz(4+THREED),sz(5+THREED),[],[],'subplot',SUBPLOT); end    
 end % if linestyle
 if nargout>1
   varargout{1}=h;
 end
-if ~SUBPLOT & ~isheld, hold off; end
+if ~strcmp(class(SUBPLOT),'function_handle') && ~isheld, hold off; end

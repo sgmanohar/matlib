@@ -1,5 +1,5 @@
 function K = gaussKern( sz, falloff )
-% K = gaussKern( sz )
+% K = gaussKern( sz , [falloff] )
 % create an n-dimensional gaussian kernel.
 % useful as an input to convn.
 % example:    sz = [ 5 ]    : create a 11 x 1 vector 

@@ -36,13 +36,7 @@ col2=[1 0 1];     % mask colour for overlay
 selection = 1:size(I,4); % select all volumes in I
 
 % read template (where from?)
-p1 = '/';
-if regexp( system_dependent('getos'),'Linux')
-  fileprefix='~/Documents/MyMRIs';
-else
-  fileprefix = [getExperimentBase p1 'matlib'];
-end
-templ = load_nii([fileprefix p1 'MNI152_T1_2mm.nii.gz']);
+templ = load_nii([ getExperimentBase '/matlib/MNI152_T1_2mm.nii.gz']);
 templ = templ.img;
 if ~isrow(bgcol) bgcol=bgcol'; end;
 

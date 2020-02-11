@@ -1,5 +1,5 @@
 function M=randrot3
-
+% generate a random 3D rotation matrix
 
 W = randn(4,1);     % random quaternion
 W = W/norm(W);      % make length = 1

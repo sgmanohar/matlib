@@ -64,8 +64,10 @@ else % otherwise, third param is a string.
   for i=1:length(s)
     e=s(i);
     if iscell(e), e=e{1}; end;
-    if ~isstruct(e), e=struct(f,nan); end;
-    sout=catfunc(dim, sout, e.(f)); % just concatenate one field
+    if ~isstruct(e), e=struct(f,nan); end
+    val = e.(f);
+    if isempty(val),  val=nan; end
+    sout=catfunc(dim, sout, val); % just concatenate one field
   end
   szout=size(sout); % now reshape to original size on structure dimensions
   szout(dim) = 1; % ensure the first dimension of concatenation is zero

@@ -36,7 +36,7 @@ i=find(strcmpi(varargin,'Bins')); if any(i)
 else NBINS = 5;
 end
 
-qx=quantile(X,linspace(0,1,NX+1)); % create quantiles of X
+qx=quantile(X,linspace(0,1,NX+1)'); % create quantiles of X
 WIDTHX = floor(NX/NBINS); % number of quantiles in one bin
 WIDTHY = floor(NY/NBINS); % number of quantiles in one bin
 
@@ -44,22 +44,30 @@ WIDTHY = floor(NY/NBINS); % number of quantiles in one bin
 % then bin these y values according to their quantiles.
 % the x-quantiles are stored in xbin(i), and the corresponding y-quantiles are
 % stored in ybin(i,j).
-ybin=nan(NX-WIDTHX+1, NY-WIDTHY+1);    % y values in each x-bin
+ybin=nan(NX-WIDTHX+1, NY-WIDTHY+1, size(X,2));    % y values in each x-bin
 for(i=1:NX-WIDTHX+1)                   % for each x-bin
-  filterx=X>=qx(i) & X<qx(i+WIDTHX);   % select trials in this x-range
-  yi = Y(filterx);                     % get their y values
-  qy=quantile(yi, linspace(0,1,NY+1)); % and find their quantiles 
+  % for multiple subjects, this works only in matlab 16+
+  filterx=X>=qx(i,:) & X<qx(i+WIDTHX,:);   % select trials in this x-range
+  yi = Y + bool2nan(~filterx);                     % get their y values
+  qy=quantile(yi, linspace(0,1,NY+1)'); % and find their quantiles 
   for(j=1:NY-WIDTHY+1)                    % for each of theese y quantile bins
     filtery=yi>=qy(j) & yi<qy(j+WIDTHY);  % select the values in this bin.
-    if ~isempty(yi(filtery))              % if there are values, 
-      ybin(i,j) = nanmean( yi(filtery) ); % calculate y bin centre value
-    else ybin(i,j)=nan; end               % otherwise give nan.
+    if ~isempty(yi(filtery))              % if there are any values,
+      yij = yi + bool2nan(~filtery);      % select only them, 
+      ybin(i,j,:) = nanmean( yij ); % calculate y bin centre value
+    else ybin(i,j,:)=nan; end               % otherwise give nan.
   end
-  xbin(i)=qx(i+floor(WIDTHX/2));       % store x bin centre
+  xbin(i,:)=qx(i+floor(WIDTHX/2),:);       % store x bin centre
 end
 
+xbin_m = nanmean(xbin,2); % mean across subjects. 
+ybin_m = nanmean(ybin,3);
+
+% smooth one bin either side
+ybin_m  = smoothn(2,smoothn(1,ybin_m,3),3);
+
 if ~any(strcmpi(varargin,'doplot'))
-  h=plot(xbin, ybin, varargin{:});
+  h=plot(xbin_m, ybin_m, varargin{:});
 else h=nan;
 end
 

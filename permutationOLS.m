@@ -44,9 +44,26 @@ function [ t_test_result, p_vals, t_statistics, t_threshold, hplot ] ...
 %
 % SGM 2014
 
+szy = size(Y);       % input dimension sizes
 if ~exist('X','var') || isempty(X)
-  warning('assuming comparison of Y against zero');
-  X=ones(size(Y,1),1); 
+  if ndims(Y)==2
+    warning('assuming comparison of Y against zero');
+    X=ones(size(Y,1),1);
+  else    % build design matrix using dimensions of Y
+    % assume Y ( SUBJECT, SAMPLES, CONDITIONS )
+    sz1 = szy; sz1(2)=1; % sizes for just one sample
+    % bring dimensions 3,4,5,... into dimension 1, to make a 2d matrix. 
+    % preserve dim 2, which is the one to correct for multiple comparisons
+    Y = reshape( permute( Y, [1 3:length(szy) 2] ), [], szy(2) );
+    G = flat( bsxfun( @times, permute( [1:szy(1)]', [1 2]    ), ones(sz1) ) );
+    Xf = []; % create basic factors
+    for i=1:length(szy)-2 % for each factor / condition
+      Xf = [Xf flat(bsxfun(@times, permute( [1:szy(i+2)]', [[2:2+i] 1] ) , ones(sz1) ) ) ];
+    end
+    % assume full factorial design is required, and that the dimension
+    % levels are categorical
+    X = x2fx( Xf, fullfact(szy(3:end))-1 , 1:length(szy)-2, szy(3:end) );
+  end
 end
 
 if ~exist('C','var') || isempty(C), C=eye(size(X,2)); end  % contrasts defaults to identity matrix
@@ -55,13 +72,21 @@ if ~exist('group', 'var') || isempty(group),   group=ones(size(Y,1),1); end
 if ~isvector(group) || size(group,1)~=size(Y,1)
   error('there should be one grouping value per row of data');
 end
-[alpha, TWO_TAILED, NPERMS ] = parsepvpairs( ...
-  {'alpha','TWO_TAILED','NPERMS'},... % set default parameters
-  {0.05   , true       , 5000   } ,varargin{:});
+[  alpha,  TWO_TAILED,   NPERMS,   CLUSTER,   CLUSTER_DIMS ] = parsepvpairs( ...
+  {'alpha','TWO_TAILED','NPERMS', 'CLUSTER', 'CLUSTERDIMS'},... % set default parameters
+  {0.05   , true       , 5000,    false    ,  1  } ,varargin{:});
 
-  
+if CLUSTER, TWO_TAILED = false; end  
 ug=unique(group);                 % grouping variables - e.g. subjects?
 onesample_t =  sum(var(X))==0;    % are all rows of X the same? Then we need a 1-sample t-test.
+
+% remove nans
+badrow  = all(isnan(Y),2) | any(isnan(X),2);
+Y(badrow,:)=[]; X(badrow,:)=[];
+group(badrow,:)=[]; 
+badsamp = any(isnan(Y),1); 
+Y(:,badsamp)=[]; 
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 % 1. Estimate maximum t over all samples, 
 %    from the null distribution created by within-group permutation 
@@ -88,7 +113,37 @@ for p=1:NPERMS % for each permutation
   if TWO_TAILED
     t_wg_min(:,p) = min(t_wg,[],2); % minimum T across samples (for 2-tails)
   end
-end
+  if CLUSTER % not tested yet!
+    % for each contrast, start with a high threshold as the max t value
+    % then reduce it by a 1% quantile value each step
+    % until the correct number of clusters is significant.
+    % then record the thresholds required for this permutation.
+    thresh = t_wg_max(:,p); % start with a threshold where only one sample is significant
+    for contrast = 1:size(t_wg,1) % for each contrast      
+      step = diff( quantile(t_wg(contrast,:) ,[0.9 0.91]) );
+      iter = 0;
+      while iter<100
+        % find clusters of samples above the current threshold
+        if ~isequal(CLUSTER_DIMS,1)
+          img = reshape( t_wg(contrast,:), CLUSTER_DIMS );
+          cc = bwconncomp( img > thresh );
+          n = cc.NumObjects;
+        else
+          cc = findregions( t_wg(contrast,:) > thresh );
+          n = size(cc,1);
+        end
+        if n>CLUSTER % if too many, stop
+          break
+        end
+        iter=iter+1;
+        thresh(contrast) = thresh(contrast) - step; % gradually lower the threhold
+      end % while reducing threshold
+    end % next contrast
+    t_wg_clu(:,p) = thresh; 
+  end % if cluster
+end % next permutation
+
+if CLUSTER, t_wg_max = t_wg_clu; end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 % 2. calculate the T corresponding to a FDR of alpha, for each contrast..

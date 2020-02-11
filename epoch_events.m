@@ -40,6 +40,11 @@ for i=1:size(X,2)
   for j=1:length(e) % for each event
     % ignore nan events
     if isnan(e(j)), continue; end
+    % if there's a 'zero' event, it swallows everything up
+    if e(j)==0, 
+      warning('zero event found in epoching');
+      y{j}=x; break; 
+    end; 
     % if no 'region' parameter supplied.
     if isempty(region)
       % use the whole segment between events j and j+1

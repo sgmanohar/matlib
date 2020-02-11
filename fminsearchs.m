@@ -10,16 +10,21 @@ function [varargout] = fminsearchs(fun, x0, N, varargin)
 %
 %   args can include: 'method', which can be one of
 %     'fminsearch' : nelder-mead simplex search (default) 
+%     'fmincon'    : same but with constraints
 %     'pattern'    : pattern search (optimisation toolbox)
 %     'ga'         : genetic algorithm
 %     'cmaes'      : covariance matrix adaptation / evolutionary strategy
 %     'anneal'     : simulated annealing
+%     'mcmc'       : markov chain monte carlo using gwmcmc, default 1e4 samples 
+%     'mcmcp'      : mcmcm with prior, standard deviation = range of x0
 %     which will run the corresponding minimisation algorithm instead of
 %     fminsearch.
 %   'parallel' - true/false
 %      line 26 is 'parfor' - change to 'for' if debugging.
 %      the searches will run MUCH faster on multicores with parallel=true!
-%
+%   'catcherrors' - true/false
+%      default = true, if an error occurs in the search, then exit
+%      gracefully
 %   return [bestx, besty, all_best_x]
 %   s g manohar
 %
@@ -53,6 +58,13 @@ if i>0
 else PARALLEL = false;
 end
 
+i=find(strcmpi(varargin, 'catcherrors'));
+if i>0
+  CATCH = varargin{i+1};
+  varargin([i i+1])=[];
+else CATCH = true;
+end
+
 p0arg_override=[]; % initial parameters override - for genetic algorithm
 switch METHOD
   case 'fminsearch'
@@ -71,8 +83,8 @@ switch METHOD
     args(8:8+length(varargin)-1) = varargin;
   case 'cmaes'
     optimfunc = @cmaes;
-    args{1}=x0(1,:);
-    args{2}=x0(2,:);
+    args{1}=mean(x0);
+    args{2}=diff(x0);
     args(3:3+length(varargin)-1) = varargin;
   case 'anneal'
     optimfunc = @(f,p)anneal(f,p,struct('MaxConsRej',10000,'MaxTries',10000,...
@@ -82,6 +94,11 @@ switch METHOD
     optimfunc = @(f,p) call_mcmc(f,p);
   case 'mcmcp'
     optimfunc = @(f,p) call_mcmcp(f,p,x0);
+  case 'fmincon'
+    optimfunc = @fmincon;
+    args{7} = x0(1,:); % min
+    args{8} = x0(2,:); % max
+    args(9:9+length(varargin)-1) = varargin;    
 end
 
 
@@ -90,6 +107,11 @@ if ~exist('N','var'), N=10; end
 bestx = repmat(mean(x0), N,1);  % keep track of best value for each iteration
 besty = inf(N,1);
 O=[];
+
+if CATCH
+  cleanupObj = onCleanup(@cleanupFunc);
+end
+
 % CHANGE TO PARFOR if you have parallel toolbox
 if PARALLEL
   pool = gcp; % get current parallel pool
@@ -97,33 +119,40 @@ if PARALLEL
 else
   NW   = 0;
 end
-parfor (i=1:N, NW)                % run in parallel
-%for i=1:N
-  if isempty(P0)
-    p0 = rand(1,size(x0,2)).*diff(x0)+x0(1,:); % hazard a starting guess
-  else % if a speficied starting point, always use that.
-    p0=P0;
-  end
-  if any(isnan(p0))
-    warning('nan parameters for fminsearch')
-    p0(isnan(p0))=0;
-  end
-  bestx(i,:) = p0;
-  besty(i)   = fun(p0);  % check the function once at this starting value
-  if ~isempty(p0arg_override) % in some functions, the p0 argument is different.
-    p0 = p0arg_override;
-  end
-  if besty(i)<inf  % only continue with fminsearch if the cost is finite
-    %[bestx(i,:) besty(i)] = fminsearch(fun, ... % now try minimisation
-    %  p0, varargin{:});
-    switch METHOD, case {'mcmc', 'mcmcp'}
-        [ bestx(i,:) besty(i) O(i)] = optimfunc( fun, p0, args{:} );      
-      otherwise 
-        [ bestx(i,:) besty(i) ] = optimfunc( fun, p0, args{:} );
+try
+  parfor (i=1:N, NW)                % run in parallel
+    %for i=1:N
+    if isempty(P0)
+      p0 = rand(1,size(x0,2)).*diff(x0)+x0(1,:); % hazard a starting guess
+    else % if a speficied starting point, always use that.
+      p0=P0;
+    end
+    if any(isnan(p0))
+      warning('nan parameters for fminsearch')
+      p0(isnan(p0))=0;
+    end
+    bestx(i,:) = p0;
+    besty(i)   = fun(p0);  % check the function once at this starting value
+    if ~isempty(p0arg_override) % in some functions, the p0 argument is different.
+      p0 = p0arg_override;
+    end
+    if besty(i)<inf  % only continue with fminsearch if the cost is finite
+      %[bestx(i,:) besty(i)] = fminsearch(fun, ... % now try minimisation
+      %  p0, varargin{:});
+      switch METHOD, case {'mcmc', 'mcmcp'}
+        [ bestx(i,:) besty(i) O(i)] = optimfunc( fun, p0, args{:} );
+        otherwise
+          [ bestx(i,:) besty(i) ] = optimfunc( fun, p0, args{:} );
+      end
     end
   end
+catch mexp
+  if ~CATCH 
+    rethrow(mexp)
+  else 
+    disp(getReport(mexp))
+  end
 end
-
 [~,m] = min(besty); % index of best function
 
 varargout{1} = bestx(m,:); % return values just like fminsearch would.
@@ -132,11 +161,13 @@ varargout{3} = bestx;      % each of the iterations
 if ~isempty(O)
   varargout{4} = O;
 end
+return
 
 function [x y R] = call_mcmc(f,p)
 [M,P,R] = gwmcmc( repmat(p', 1,2*length(p)), {@(pp)-f(pp)}, 10000); 
 x=R.optimal; y=optimalLP;
 R.M=M; R.P=P;
+end
 
 function [x y R] = call_mcmcp(f,p, x0)
 % in this case, add a prior to the MCMC
@@ -149,4 +180,19 @@ function [x y R] = call_mcmcp(f,p, x0)
 }, 10000); 
 x=R.optimal; y=optimalLP;
 R.M=M; R.P=P;
+end
 
+  function cleanupFunc()
+    fprintf('exiting fminsearchs\n');
+    
+    [~,m] = min(besty); % index of best function
+    
+    out{1} = bestx(m,:); % return values just like fminsearch would.
+    out{2} = besty(m);
+    varargout{3} = bestx;      % each of the iterations
+    if ~isempty(O)
+      varargout{4} = O;
+    end
+    
+  end
+end

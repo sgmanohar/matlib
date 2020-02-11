@@ -1,6 +1,9 @@
 function C=nancat(DIM, varargin)
 %   X = nancat( DIM, x1, x2, x3... )
 %         Concatenate arrays xi along dimension DIM, with nan padding.
+% Works just like cat. Doesn't complain if x2 is longer or shorter than x1,
+% it simply pads the one that is shorter with nans. Works with arbitrary
+% number of dimensions.
 %   X = nancat( [SOURCE_DIM, DEST_DIM], cell_array )
 %         Concantenate elements from SOURCE_DIM in the cell array, along DEST_DIM. 
 %         e.g.   nancat([1 2], { [1;2], [3;4] ; [5;6], 7 })     i.e. X{2,2}(2,1)
@@ -8,9 +11,7 @@ function C=nancat(DIM, varargin)
 %   X = nancat( cell_array )
 %         Concatenate the arrays in the cell-array, along the next
 %         dimension (calculated using the size of the first cell)
-% Works just like cat. Doesn't complain if x2 is longer or shorter than x1,
-% it simply pads the one that is shorter with nans. Works with arbitrary
-% number of dimensions.
+%   X = nancat( struct_array ) : Concatenate each field using nancat.
 %
 % 'padvalue', VAL  (defaults to nan) 
 %        VAL specifies a single value that is used to fill unused space. 
@@ -31,6 +32,7 @@ function C=nancat(DIM, varargin)
 %        fields of the stucture array
 % (c) sanjay manohar 2007
 
+VERBOSE = true;
 if nargin==0
     error('syntax: X=nancat(DIMENSION, X1, X2, ...)');
 end
@@ -58,6 +60,7 @@ if nargin==2 && length(DIM)==2 && iscell(C), C=cellcat(DIM,C); return ; end; % c
 if nargin==2 && isstruct(C) && numel(C)>1 % is it a structure array? 
   % if so, devolve the whole thing for each field
   fn=fieldnames(C); 
+  if ndims1(C)>1, error('to deal with n-dimensional struct arrays, use catStruct instead'); end
   for i = 1:length(fn) % for each field:
     y.(fn{i}) = nancat(DIM, C.(fn{i})); % call nancat with that field.
   end
@@ -69,7 +72,7 @@ if      isnumeric(C) || islogical(C),   padvalue = nan;
 elseif  iscell(C)                       padvalue = { [] };
 elseif  ischar(C)                       padvalue = ' ';
 % if it's a struct, this is a hack to get an empty structure with same fields: 
-elseif  isstruct(C)                     tmp=C; tmp(end+2)=C(1); padvalue=tmp(end-1);
+elseif  isstruct(C)                     padvalue = emptyStructLike(C);
 else    error('nancat: unknown type, %s', class(C));
 end
 
@@ -89,18 +92,25 @@ end;  varargin(remove)=[];
 % create padding of a given size
 makepadding = @(sz) repmat( padvalue, sz );
 
+
 for(i=2:length(varargin)) % for each operand
+    time_i = tic;
     v = varargin{i}; % concatenate v onto C
     if iscell(C) && isnumeric(v), v=num2cell(v); end % convert v to cell
     if iscell(v) && isnumeric(C), C=num2cell(C); padvalue=cell(padvalue); end % switch to cell mode
     sizeC=size(C); sizeV=size(v);
-    if all(sizeC==0), C=v; warning('first parameters were empty, so ignored'); continue; end; % earlier operands were empty?
+    if all(sizeC==0),
+      C=v; warning('nancat:emptyskipped', 'first concatenand empty, so it was skipped.'); continue;
+    end; % earlier operands were empty?
     if    (length(sizeC)>length(sizeV)) sizeV=[sizeV ones(1,length(sizeC)-length(sizeV))]; 
     elseif(length(sizeV)>length(sizeC)) sizeC=[sizeC ones(1,length(sizeV)-length(sizeC))]; 
     end % ensure same number of dimensions.
     uneqdim = find(~(sizeV==sizeC)); % for each of the unequal dimensions
     for(j=1:length(uneqdim))
         sizeC=size(C); sizeV=size(v); % Sgm 2019 - sizes may have changed!
+        if length(sizeV)<length(sizeC) % if there are extra dimensions in the current accumulated value
+          sizeV=[sizeV ones(1,length(sizeC)-length(sizeV))]; % add on the extra dimensions as size 1
+        end
         if uneqdim(j)==DIM; continue; end % (except for the one you're catting along)
         d=uneqdim(j);
         if(sizeC(d)>sizeV(d)) % V is too small: add nans to d if it's shorter
@@ -120,6 +130,10 @@ for(i=2:length(varargin)) % for each operand
         end
     end
     C=cat(DIM,C,v);
+    time_i = toc(time_i);
+    if time_i*nargin > 30 && VERBOSE % will the operation take more than 30 seconds?
+      fprintf('concatenating item %g\n', i);
+    end
 end
 
 function out = cellcat( DIM, cell )

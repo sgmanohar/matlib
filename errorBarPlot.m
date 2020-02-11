@@ -1,8 +1,9 @@
 function varargout = errorBarPlot(X, varargin)
 % h = errorBarPlot(X, varargin)
-%   X is an array
+%   X is an array - 2D,  3D or 4D
 %     Plot with within-subject standard error bars. 
-%     Means are taken over dimension 1.
+%     Means are taken over dimension 1. If 3D, the 3rd dim is different lines.
+%     If 4D, the 3rd dim is separated on the X-axis, and 4th dim is lines. 
 %   X is a cell array { Table, 'yvar',  'grouping' , 'xvar' , 'linesvar'  }
 %     grouping and linesvar are optional, eg: { T, Y, X } or { T, Y, G, X } 
 %     If grouping is present, means are taken for each group, and the 
@@ -10,6 +11,7 @@ function varargout = errorBarPlot(X, varargin)
 %       bars are across all rows that match a level of xvar.
 %     If linesvar is present, then multiple lines are plotted, for each
 %       level of this variable
+%   X is an LME object - plot the coefficients with s.e.m. error bars
 % options:
 %           'area': 0 = error bars only
 %                1 = shaded transparent area
@@ -48,6 +50,7 @@ function varargout = errorBarPlot(X, varargin)
 %                statistical function.
 % Sanjay Manohar 2014
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % 1. Decide upon parameters
 DEFAULT_WITHIN_SUBJECT_ERROR = 1;
 if exist('nanmean','file'),   fmean = @nanmean; % mean function
@@ -76,6 +79,7 @@ catch me
   plotargs=varargin;
 end
 DOTTED_AREA = AREA==2; % use dotted line above and below, instead of area plot
+LINES_X = []; % break lines horizontally at given points.
 
 if ~isempty(COLOR), plotargs=[plotargs {'color',COLOR}]; end
 
@@ -132,8 +136,29 @@ if size(X,1)>5 && any(any(all(isnan(X(end-5:end,:,:)),1)))
   WITHINSUBJECTERROR = false;
 end
 
-sx=size(X); 
+% handle 4-dimensional inputs
+% put dimension 3 onto the x-axis, and dimension 4 remains as the 'lines'
+orig_sx = size(X); % keep original size of X
+if ndims(X)==4 
+  sx = size(X); % keep original size of X
+  if ~isempty(xaxisvalues)
+    if size(xaxisvalues,2)>1 % ensure xaxisvalues is not a matrix
+      error('cannot do 4D inputs when 2D xaxisvalues is specified');
+    end
+    xaxisvalues = xaxisvalues(:); % make column
+  else
+    xaxisvalues = [1:sx(2)]'; % create column for first dim of X
+  end
+  X = X(:,:,:); % collapse 4th dim into lines dimension
+  xaxisvalues = bsxfun( @plus,  xaxisvalues,  sx(2)*([1:sx(3)]-1) ) ; 
+  xaxisvalues = kron( ones(1,sx(4)), xaxisvalues ); 
+end
+sx = size(X); % keep original size of X
 
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % 2. Calculate main effects 
 addon=0;
 if ~isempty(medim) % main effect analysis? 
@@ -202,7 +227,9 @@ if ~AREA % normal points/lines
       h=errorbar(xaxisvalues, Y,yerrorm,yerror, plotargs{:});
       if PLOT_INDIVIDUALS  % individuals as dotted lines
         hold on;
-        plot(xaxisvalues,X',':',plotargs{:}); 
+        for i=1:size(X,3)
+          plot(xaxisvalues(:,i),X(:,:,i)',':',plotargs{:});
+        end
       end
     case 'bar', 
       % plot bar with errorbars
@@ -238,7 +265,7 @@ else % AREA plot
         xav = [1:size(X,2)]'; % average x values
       end
       if AREA==1 % error region shading
-        xm = fmean(Xm(:,:,i));   % calculate mean
+        xm = fmean(Xm(:,:,i),1);   % calculate mean
         % fill in area as a polygon
         xx = [xav' fliplr(xav')]; % x coords of polygon for plotting
         yy = [xm+yerror(:,i)' fliplr(xm-yerrorm(:,i)')]; % y coords for plotting
@@ -269,7 +296,7 @@ else % AREA plot
       elseif AREA<0 % violin plot?
         dxav = mean(diff(xav)); % difference in x axis values = scale of pdf
         xm = fmean(Xm(:,:,i));   % calculate mean
-        yav=linspace(-2.5*yerror, 2.5*yerror, 30);
+        yav=linspace(-2.5*yerror(:,i), 2.5*yerror(:,i), 30);
         for k=1:size(xav,1) % for each x-point, 
           %xx=xav(k)+dxav*normpdf(yav(k,:)',0,yerror(k));
           %yy=yav(k,:)'+xm(k);
@@ -316,8 +343,9 @@ if isempty(DO_STATS)  % do stats was not specified.
   if any(sx==1),         DO_STATS = false; end
 end    
 if DO_STATS
+  X=reshape(X,orig_sx); % put back to original shape
   try
-    if ~AREA % non-area? use rm-ANOVA for stats
+    if AREA<=0 % non-area? use rm-ANOVA for stats
       stat = rmanova(X, STAT_ARGS{:});   % use simple repeated measures anova
       txt='';
       for row=2:size(stat.pValue) % plot each p value
@@ -341,7 +369,7 @@ if DO_STATS
     end
   catch mx
     fprintf('unable to do statistics:\n');
-    disp(mx);
+    getReport(mx)
   end
 end
 if nargout > 0       % do we need to return the figure object handles?

@@ -3,11 +3,14 @@ function r=equals(a,b)
 % i.e. false if they are of different types or sizes.
 % true if they are identical. structs must have identical
 % fieldnames and contents but order doesnt't matter.
+% by default, nan == nan.
 %
 % e.g. a=[], b=[] returns true
 %      a=struct('x',1,'y',2), b=struct('y',2,'x',1) returns true
 %      
 % sanjay manohar 2010
+MATCH_NAN = true;
+
 if(exist('b')~=1) error('syntax: equals(a,b)');end;
 r=0;
 if(class(a)~=class(b)) return;end;
@@ -15,6 +18,10 @@ if(isnumeric(a))
         if(size(size(a))~=size(size(b))) return;end;
         if(size(a)~=size(b)) ;return;end;
         if(length(a)==0) r=1;return ;end;
+        if MATCH_NAN % make nans match?
+          tmp = rand; 
+          a(isnan(a))=tmp; b(isnan(b))=tmp;
+        end
         if any(a~=b) ;return;end;
         r=1;return;
 end;

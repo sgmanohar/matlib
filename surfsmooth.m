@@ -3,6 +3,7 @@ function [h,X]=surfsmooth(varargin)
 % calls surf, but applies 20% smoothing and makes the surface look nice.
 % 'smooth' - the size of smoothing window to use, as a fraction of the grid
 %            size. Default 0.2;
+% sgm 
 X=varargin{1};
 KERNEL = 'GAUSS';
 SMOOTH = 0.2; 

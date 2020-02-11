@@ -1,9 +1,17 @@
 function zt = ztrans(x, zrange)
+% Y = ztrans(X, zrange)
 % z-transform of a time series
-% return a z-plane ranging from -zrange to +zrange (default -5 to +5)
+% return a z-plane ranging from -zrange to +zrange (default -5 to +5), 
+% split into 100 x 100 bins
+% definition: for all values of z on complex plane, 
+%    Y( z ) = sum_n ( x(n) * z^-n  )
 % sgm 2017
 if ~exist('zrange','var')
   zrange=5;
+end
+
+if ~iscolumn(x)
+    error('x must be a column vector')
 end
 
 zR = bsxfun(@plus, ...

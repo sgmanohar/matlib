@@ -31,16 +31,25 @@ if isempty(IDX), return; end % no subplots? maybe h or w are zero.
 % are we doing each subplot independently, across multiple figures? 
 if exist('FIG','var') && strcmp(FIG, 'across') 
   FIG = varargin{1};      % get list of figures
+  varargin=varargin(2:end);
   for i=1:length(IDX)     % call the function for each subplot separately. 
     makeSubplotScalesEqual(h,w,repmat(IDX(i),size(FIG)), FIG);
   end
   return
 end
 
+i=find(strcmpi('subplot',varargin),1);
+if any(i)
+  SUBPLOT = varargin{i+1};
+  varargin(i:i+1)=[]; 
+else
+  SUBPLOT = @subplot;
+end
+
 % read all axes limits 
 for(i=1:length(IDX))
-  if(exist('FIG','var')) figure(FIG(i)); end
-  subplot(h,w,IDX(i));
+  if(exist('FIG','var') && ~isempty(FIG) ) figure(FIG(i)); end
+  SUBPLOT(h,w,IDX(i));
   xl(i,:)=xlim();
   yl(i,:)=ylim();
   zl(i,:)=zlim();
@@ -54,8 +63,8 @@ ncl = [ min(cl(:,1)) max(cl(:,2)) ]; % new colour limits
 
 % set new axes limits
 for(i=1:length(IDX))
-  if(exist('FIG','var')) figure(FIG(i)); end
-  subplot(h,w,IDX(i))
+  if(exist('FIG','var') && ~isempty(FIG) ) figure(FIG(i)); end
+  SUBPLOT(h,w,IDX(i))
   xlim(nxl);
   ylim(nyl);
   zlim(nzl);

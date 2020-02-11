@@ -8,7 +8,7 @@ function [beta t0 nll]=reciprobit_mle(RT, COND, varargin)
 %  BETA ( SIGMA/MU, CONDITION )
 %  T0   = delay
 %  NLL  = negative log likelihood of model
-
+% sgm
 
 [range]=parsepvpairs({'range'}, {[0 inf] }, varargin{:});
 

@@ -136,6 +136,7 @@ info.sDepA  = []; % angle of departure (where it leaves the 30-pixel circle)
 info.sSpd   = []; % maximum speed of eye during saccade
 info.sDur   = []; % duration of saccade
 
+prev_warn_state = warning('off','nancat:emptyskipped');
 for(i=1:length(s))  % for each trial
           scStart=nan; scEnd=nan; % start with blank values for this trial
         scBegpt=nan; scBlink=nan; scBendT=nan; scBendA=nan; scCurvA=nan;
@@ -157,8 +158,10 @@ for(i=1:length(s))  % for each trial
         end
     else                      t2=s(i).(finish);  % event name
     end
+    if ~isempty(t1) && ~isempty(t2) % ensure there are times
     
     filter = s(i).pos(:,1) > t1 & s(i).pos(:,1) < t2; % select rows of 'pos' by their timestamp.
+    
     pt=s(i).pos(filter,1);                     % times of points in region of interest
     if(pupil==0)                               % eye position is columns [2,3]
         p =s(i).pos(filter,[2:3]) * [1;1j];    % get whole trace for this saccade
@@ -337,8 +340,9 @@ for(i=1:length(s))  % for each trial
         % What is the maximum absolute value of the sample that is permitted?
         % pupil sizes > 20,000 and eye positions > 2000 pixels are excluded.
         ABSMAX   = 20000;
-        % speed above which data is removed around nans. Normally 1.5
-        BLINKSPD = 2.5;    
+        % speed above which data is removed around nans. Normally 1.5 or
+        % 2.5
+        BLINKSPD = 3.5;    
       else
         ABSMAX   = 2000;
         BLINKSPD = 0.5;    
@@ -482,6 +486,10 @@ for(i=1:length(s))  % for each trial
     if smoothing & length(p)>smoothing    % apply smoothing to traces
       p = smooth(p, smoothing, smoothMethod); 
     end
+    else   % t1 empty or t2 empty?
+      warning('trial %i had no timestamps');
+      p=nan; t1=nan;
+    end 
   else       % pos was empty. Indicates a dud trial.
     p=nan;   
   end
@@ -579,7 +587,8 @@ end
 if verbose % inform user about cleaning?
     fprintf('cleanup: %d short data segments removed from %d trials\n', sum(removedsegments), sum(removedsegments>0));
 end
-
+% restore warnings
+warning(prev_warn_state.state, prev_warn_state.identifier);
 %%%% Means
 if RETURN_TRACES & ~isempty(meancriteria)    % use criteria to take means?
     ucr = unique(meancriteria);              % unique levels of the criterion.

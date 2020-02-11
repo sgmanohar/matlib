@@ -21,6 +21,9 @@ function [Xb,Yb, p,t, h, resid ]=conditionalPlot(X,Y, Nbins, varargin)
 %             single continuous linear predictor (1,2,3 etc).
 %          T ( QUANTILE )  = t statistic for linear effect of condition
 %          H = handle of lines as returned by errorbarplot. 
+%  'resid' - returns the residuals after the means of the X-bins surrounding 
+%     each Y-data point have been subtracted. It is the Y-distance from the 
+%     binned curve. 
 %
 % Parameters:
 %  'meanfunc' = function handle to use instead of "nanmean". 
@@ -29,7 +32,6 @@ function [Xb,Yb, p,t, h, resid ]=conditionalPlot(X,Y, Nbins, varargin)
 %     'log', 'asin', 'gauss' (inverse gaussian from 0 to 1), or
 %     'gauss2' (inverse gaussian from 0.5 to 1). Note that the output values
 %     Xb and Yb will not be transformed.
-%  'overlap' - if false, then use non-overlapping bins. Default true
 %  'divisions' - number of subdivisions, default 100. If divisions == Nbins,
 %      then there is no overlap 
 %  'color' - set colour of plot. If omitted, the ColorOrder is used for
@@ -41,10 +43,9 @@ function [Xb,Yb, p,t, h, resid ]=conditionalPlot(X,Y, Nbins, varargin)
 %  'smooth' - 0 = no smoothing. n = smooth over n bins, using smoothn (defaults
 %     to gaussian kernel.)
 %  'plotIndividuals' - if true, then draw a line for each person.
-%  'resid' - returns the residuals after the means of the X-bins surrounding 
-%     each Y-data point have been subtracted. It is the Y-distance from the 
-%     binned curve. 
+%  'plotTrajectories' - it true, then draw lines linking the conditions. 
 %  'area' - 0 = dotted lines, 1 = area, >3 = graded quantile fill
+%  'plotstats' - if true, compare the lines using permutationOLS
 %  remaining unrecognised arguments are passed on to the 'plot' command.
 % 
 % dependencies: smoothn, nanmean, nancat, removeIdenticals, permutationOLS
@@ -60,9 +61,9 @@ if iscell(X) & numel(X)<6 & istable(X{1}) % table form
     if isempty(X{4}), % if 'sub' is empty, then treat it as one subject
       X{4}='CONST';  X{1}.CONST=ones(numel(X{1}(:,1)),1);  
     end
-    sub = X{1}.(X{4}); 
-    con = X{1}.(X{5});
-    usub =unique(sub);
+    sub  = X{1}.(X{4}); 
+    con  = X{1}.(X{5});
+    usub = unique(sub);
     ucon = unique(con);
     for i=1:length(usub)
       for j=1:length(ucon)
@@ -112,17 +113,19 @@ if ~iscell(X)
   end
 end
 
-Nq       = 100;     % number of quantiles (used when NO_OVERLAP=0)
+Nq       = 100;     % number of quantiles 
 binwidth = 1/Nbins; 
 if exist('nanmean','file')  MEANFUNC = @nanmean;  % do we have 'nanmean' ?
 else                        MEANFUNC = @mean;     % if not, use mean.
 end
 STDFUNC            = @(x)nanstd(x); % error bar size when only one subject given
-doErrorBars        = true;  % on the standard binning plot, show error bars for both X and Y?
+doErrorBars        = true;  % on the non-overlapping binning plot, show error bars for both X and Y?
 FILL_AREA          = 2;  % if false, show dotted lines for standard error, rather than shaded area
 REMOVE_IDENTICAL_X = true;  % if there aren't enough unique X-values, then interpolate?
 WITHINSUBJECTERROR = true;  % remove subject means before calculating standard error?
 PLOT_INDIVIDUALS   = false; % draw a line for each subject, in addition to mean and error.
+STANDARDISE_RESIDUALS = false;
+PLOT_TRAJECTORIES  = false; % draw lines between conditions, for each quantile
 % transform axes?
 T.identity = @(x)x;
 T.probit   = @(x) log(eps+x./(1-x+eps));
@@ -168,6 +171,9 @@ end
 i=find(strcmpi(varargin, 'PlotIndividuals')); if i, 
   PLOT_INDIVIDUALS = varargin{i+1}; varargin([i i+1])=[]; 
 end
+i=find(strcmpi(varargin, 'PlotTrajectories')); if i, 
+  PLOT_TRAJECTORIES = varargin{i+1}; varargin([i i+1])=[]; 
+end
 i=find(strcmpi(varargin, 'Conditions')); if i, 
   C = varargin{i+1}; varargin([i i+1])=[]; 
   if ~isempty(C)
@@ -191,7 +197,11 @@ i=find(strcmpi(varargin, 'plotargs')); if i
 else  plotargs={};
 end
 
-
+DO_STATS = nargout>2; % whether to do statistics?
+DO_STATS_PLOT = nargout > 4; 
+i=find(strcmpi(varargin,'plotstats')); if i
+  DO_STATS_PLOT = varargin{i+1}; varargin([i i+1])=[]; 
+end
 
 if NO_OVERLAP , N=Nbins;   % N is the number of quantiles to sample, i.e.
 else N=floor(Nq*(1-binwidth));  % number of points on a CAF curve, e.g. 100*0.8
@@ -201,6 +211,11 @@ binwidth_n = floor( binwidth*Nq );  % points per window-bin
 RESIDUALS = nargout>5; % should we calculate residuals of X?
 if ~exist('SMOOTH','var'), SMOOTH   = binwidth_n;    end  % smoothing width = window size(used when overlap) 
 
+i=find(strcmpi(varargin, 'standardise')); if i, 
+  STANDARDISE_RESIDUALS= varargin{i+1}; varargin([i,i+1])=[];
+end
+
+
 %%%%%%%%%%%%%%%%%%%%%
 % Calculate binning
 
@@ -209,8 +224,9 @@ FULL_RANGE = true;  % if false, exclude 1% of highest and lowest x-values.
 for(i=1:size(X,1))       % for each subject
   x_i=nan(size(X,2),N);  % keep track of bin centres
   for(j=1:size(X,2))     % for each condition
-    if ~STANDARD_BINNING      % SLIDING WINDOW BINS
-      quantiles = quantile(X{i,j}, linspace(0,1,Nq)); % create quantiles
+    if ~STANDARD_BINNING      % VARIABLE WIDTH sliding window bins BY QUANTILE
+      quant_levels = linspace(0,1,Nq);
+      quantiles = quantile(X{i,j}, quant_levels); % create quantiles
       % go through bins, but there aren't 100 bins because of the width!
       for q=1:N   % e.g. 1:80 for 5 bins
         % get start, mid and end of the bin
@@ -281,6 +297,10 @@ if RESIDUALS                  % calculating residuals? if so, create space to st
        right = min(NP,k+window);          % the current data point
        % calculate residual as the difference from mean of Y in the window
        resid{i,j}(k,1) = Y{i,j}(k) - MEANFUNC(Y{i,j}(left:right)); 
+       if STANDARDISE_RESIDUALS
+         r_sd = nanstd( Y{i,j}(left:right) );
+         resid{i,j}(k,1) = resid{i,j}(k,1) / r_sd ;
+       end
      end
    end
   end
@@ -296,7 +316,7 @@ t_y = YTRANSFORM( Yb );
 h=[];                         % keep graphics / line handles
 cols = get(gca,'ColorOrder'); % use axis colours for different lines
 
-if NO_OVERLAP % for standard binning, we have just a couple of bins
+if NO_OVERLAP % for non-overlaping bins, we have just a couple of bins
   for j=1:size(X,2) % so for each bin, 
     if doErrorBars  % draw error-bars for both X and Y
       if size(X,1)>1  % num subjects > 1
@@ -382,11 +402,17 @@ else % SLIDING BIN = we have a whole curve to plot
     end
     hold on
   end
+  if PLOT_TRAJECTORIES 
+    plot( sq(nanmean(t_x)) , sq(nanmean(t_y)) ,'color',[.5 .5 .5] );
+  end
   %%%%%%% STATISTICS on sliding bin data?
-  if nargout>2 % DO STATS?  treats conditions as a continuous variable
+  if DO_STATS % DO STATS?  treats conditions as a continuous variable
     NS = size(Yb,1); NC = size(Yb,2);      % run mixed effects permutation test
-    if nargout<5, ao={[],[],[],[]};        % did you request a figure handle? if so 
-    else          ao={[],[],[],[],[]}; end % then request a significance bar from permutationOLS.
+    if nargout<5 || ~DO_STATS_PLOT, 
+      ao={[],[],[],[]};        % did you request a figure handle? if so 
+    else
+      ao={[],[],[],[],[]};     % then request a significance bar from permutationOLS.
+    end 
     % create a design matrix: column of 1s, then column of conditions (assume linear effect) 
     DES=[flat(ones(NS,NC))  zscore(flat(repmat(1:NC,[NS,1]))) ];
     if var(DES(:,2))>0  % assuming there are different conditions to compare:

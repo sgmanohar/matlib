@@ -27,7 +27,37 @@ result=0;
 debugfixation=0;
 count=0;
 totaltime=0;
-while cont
+DRAIN_QUEUE = false;
+if DRAIN_QUEUE
+  % drain queue
+  flushEyelinkQueue();
+end
+
+while cont    
+  if DRAIN_QUEUE
+    drained=0;
+    while(~drained) % get queued samples and events
+      [samples, events,drained]=Eyelink('GetQueuedData');
+      if(isempty(events))continue;end;
+      endfixs  =find(events(2,:) == el.ENDFIX);
+      startfixs=find(events(2,:) == el.STARTFIX);
+      if(length(startfixs)>0)
+      
+      end
+      if(length(endfixs)>0)
+        fixtime=0;
+        isfixating=0;
+        for(i=1:length(endsaccs))
+          results= [events([1 14 15],endsaccs(i))]';
+          dist=norm(events([14,15],endsaccs(i)) - events([9,10], endsaccs(i)));
+          if(dist>minsize)
+            return; 
+          end;
+        end
+      end;
+    end;
+  end % queue now drained
+  
   if(Eyelink('NewFloatSampleAvailable'))
     s=Eyelink('NewestFloatSample');
     if(isstruct(s))

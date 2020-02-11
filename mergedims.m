@@ -13,7 +13,9 @@ function Y = mergedims( X, dims )
 D = [ 1:dims(1)-1,  dims ];
 % find which dimensions will be trailing - the ones not included so far
 trailing = 1:ndims1(X);
-trailing( any(trailing==D') ) = []; 
+
+% trailing( any(trailing==D') ) = [];  % new version
+trailing( any( bsxfun( @eq, trailing, D' ) ) ) = [];
 D = [ D trailing ];                   % put them on the end
 sz = size(X); % size of original
 Y = permute(X, D);

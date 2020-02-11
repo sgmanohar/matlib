@@ -16,7 +16,7 @@ function Y=findn(X,   varargin)
 % sgm 2011-2019
 
 
-if strcmp(varargin{1}, 'rows')
+if nargin>1 && strcmp(varargin{1}, 'rows')
   DIMENSIONAL = false;
   varargin(1)=[];
 else

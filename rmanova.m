@@ -1,4 +1,4 @@
-function [ A, model, t ] = rmanova(T, varnames, varargin)
+function [ A, Lmodel, t ] = rmanova(T, varnames, varargin)
 %    ANOVA = rmanova( T )
 % [  ANOVA , model , table ] = rmanova( T, varnames )
 % repeated measures anova using matlab's fitlme, using data in 
@@ -27,7 +27,7 @@ RE = enum({'FACTORIAL','INTERCEPT'});
 re = RE.INTERCEPT;
 
 
-NOCATEG = true; % prevent categoricalising factor variables? (unless explicitly specified)
+NOCATEG = false; % prevent categoricalising factor variables? (unless explicitly specified)
 
 if ndims(T)>2 || ... % if the data is multidimensional, or if it is a table 
     ...% and the first column is 
@@ -66,16 +66,16 @@ t = array2table(T,'variablenames',varnames);
 
 vn = t.Properties.VariableNames; % get var names
 
-i=regexpi(varargin, 'categ.*'); % check for 'categorical' parameter
-i=find(~cellfun(@isempty, i)); % any match?
+i=strcmpi(varargin, 'categorical'); % check for 'categorical' parameter
+i=find(i); % any match?
 if ~isempty(i) % did they specify categorical variables?
   CATEG = varargin{i+1};
   varargin(i:i+1)=[];
   for i=1:length(CATEG) % make them categorical
-    T.(vn{CATEG(i)}) = categorical( T.(vn{CATEG(i)}) );
+    t.(vn{CATEG(i)}) = categorical( t.(vn{CATEG(i)}) );
   end
 else % guess which are categorical
-  for j=1:length(vn)
+  for j=1:length(vn)-1 % don't change the last column to categorical! it's the dependent.
     uj = unique(t.(vn{j}));
     % if there's between 2 and 8 unique values,
     if length(uj)>1 && length(uj)<=8 && (j==1 || ~NOCATEG) % is it categorical?
@@ -103,7 +103,7 @@ end
 %%%%%%%%%%%%% Actually fit the model here %%%%%%%%%%%%%%%  
 if exist('fitglme','file'),  fitfun = @fitglme;
 else                         fitfun = @fitlme;   end
-model = fitfun(t,model, varargin{:});
+Lmodel = fitfun(t,model, varargin{:});
 %model = fitglme(t,model, varargin{:});
-A = anova(model);
+A = anova(Lmodel);
 

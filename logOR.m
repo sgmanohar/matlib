@@ -4,7 +4,7 @@ function L = logOR(X,varargin)
 %  logOR( [X,Y] )
 % sgm 2016
 if nargin==2
-  Y = varargin;
+  Y = varargin{1};
 else
   Y = X(:,2);
   X = X(:,1);

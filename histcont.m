@@ -1,13 +1,14 @@
 function varargout=histcont(Y, bins, width, varargin)
-% HISTCONT Histogram of continuous data -- Sliding window.
+% Histogram of continuous data -- Sliding window.
 %   - calculate a binned probability density
+%   - works on n-dimensional data, using dimension 1.
 % function [N, X] = histcont(X, bins, width, ...)
-%   N = HIST(Y) count elements of Y in sliding window of width 1/10th 
-%               of the range of Y. Defaults to 10 positions.
+%   uses N = HIST(Y) to count elements of Y in sliding window of width 1/10th 
+%               of the range of Y. Defaults to 200 window positions.
 %               as with HIST, if Y=matrix, then work on each column.
 %   BINS  = number of points to return. Like HIST, you can instead specify
 %           the bin centres as a vector. 
-%           default 10.
+%           default 200, or number of samples whichever is smaller.
 %   WIDTH = the width of each bin as a proportion of the whole range.
 %           default = 0.1
 % 
@@ -15,27 +16,34 @@ function varargout=histcont(Y, bins, width, varargin)
 %   1) the returned N-values are the count per unit of X
 %   2) the integral of N dX will equal the number of non-NaN values in the
 %      sample; i.e. the denominator of the density counts NaNs
-%   3) currently configured to plot a line histogram. If you prefer the
-%      original bar histograms, edit the line at the top of the code!
 %
-% params: 'Bar'   true/false: draw bars instead of line
-%         'Count'             scale height to the raw count per bin, rather 
-%                             than "per unit X"
-%         'Proportion' t/f:   calculate proportion, rather than count.
+% params: 'Plot'              'Bar' (like original HIST), 'Line' (default), 
+%                             'Area', 'None', 'CDF' (cumulative density)
+%         'Count'  t/f        scale height to the raw count per bin, rather 
+%                             than "density per unit X" (default false) 
+%         'Proportion' t/f:   calculate proportion, rather than count (default false).
 %         'Plotargs':         a cell array, whose elements get passed to "plot" 
+%         'Support':          what range of x-values to use. 'range': min:max; (default)
+%                             'sd': -2sd to +2sd around mean; 
+%                             'quantile': 5th to 95th percentile  
 % SGM 2014
 
-BAR = false; % do a bar histogram? otherwise a line.
-[BAR, COUNT, AREA, PROP, plotargs ] = parsepvpairs( ...
-  { 'Bar', 'Count' , 'Area', 'Proportion', 'plotargs'}, ...
-  {  false,  false , false , false , {}      }, ...
+Plot = enum({'LINE','BAR','CDF','AREA', 'NONE'});
+PLOT = Plot.LINE; % do a bar histogram? otherwise a line.
+[     COUNT,     PROP,        plotargs,    PLOT ,  SUPPORT  ] = parsepvpairs( ...
+  {  'Count' ,  'Proportion', 'plotargs', 'plot', 'support' }, ...
+  {   false ,    false ,      {},       nargout==0, 'range' }, ...
   varargin{:}); 
 
-
+if isstr(PLOT)
+  PLOT = Plot.getIndex(PLOT);
+elseif PLOT==0
+  PLOT = Plot.NONE;
+end
 
 if isrow(Y) Y=Y'; end % make into columns
-if ~exist('width','var'), width = 0.1; end % width of a bin, as a proportion of range
-if ~exist('bins','var'),  % number of bins
+if ~exist('width','var') || isempty(width), width = 0.1; end % width of a bin, as a proportion of range
+if ~exist('bins','var') || isempty(bins),  % number of bins
   bins  = floor(size(Y,1)*(1-width)); % bin for every data point!
   bins=min(bins,200); % default: no more than 200 bins!
 end 
@@ -43,7 +51,19 @@ if ~iscolumn(bins), bins=bins'; end % ensure column
 if bins*width<1, warning(['the histogram bins are not wide enough to overlap!' ...
     'width should be greater than 1/bins']); end
 
-range = [min(Y(:)),max(Y(:))]; % work from max to min over all datapoints
+% calculate the support of the distribution, based on the whole dataset
+% across all columns.
+switch SUPPORT
+  case 'range'
+    range = [min(Y(:)),max(Y(:))]; % work from max to min over all datapoints
+  case 'sd'
+    rangesize = [-2 +2];
+    range = nanmean(Y(:)) + rangesize * nanstd(Y(:)); 
+  case 'quantile'
+    rangesize = [0.05 0.95];
+    range = quantile(Y(:),rangesize);
+end
+
 binwidth = diff(range)*width;  % physical bin width
 if length(bins)==1 % create edges and centres of bins
   binL = linspace(range(1), range(2)-binwidth, bins)'; % linear spaced bin starts
@@ -65,7 +85,7 @@ N=permute( squeeze(sum( bsxfun(@ge, Y, permute(binL, shdim1 )) ...
                       & bsxfun(@lt, Y, permute(binR, shdim1 )),1) ) , shdim2); 
 
 if isempty(plotargs) && ndims(N)>2 %% default area if more than 2 dimensions
-  plotargs = {'area',1};
+  plotargs = {'area',1,'dostats',0};
 end
 
 
@@ -76,18 +96,29 @@ if PROP % proportions rather than counts? divide by number of samples
   N=bsxfun(@rdivide, N, sum(~isnan(Y)) ); % pray these are the same dimensions
 end
 X=binC;
-if     nargout==0, 
-  if BAR, h=bar(X,N);  % original bar histogram?
-  elseif AREA
+if PLOT == Plot.CDF 
+  N=cumsum(N,1); 
+end
+
+if PLOT ~= Plot.NONE,  % if doing plot: 
+  if PLOT == Plot.BAR, h=bar(X,N);  % original bar histogram?
+  elseif PLOT == Plot.AREA
     %h=area(X,N,'facealpha',0.8); % stacked areas?
     h=area(X, [N(:,1) diff(N,[],2) ] ,'facealpha',0.7); % unstacked!
-  else
+  else % line plot
     if ndims(N)==2, 
       h=plot(X,N, plotargs{:});   % continuous line histogram
     else
-      h=errorBarPlot(permute(N,[2 1 3]), 'xaxisvalues',X, plotargs{:}); 
+      if ndims(N) < 4
+        h=errorBarPlot(permute(N,[2 1 3]), 'xaxisvalues',X, plotargs{:});
+      else
+        plotn(permute(N,[2,1,3,4,5,6,]), ...
+          'plotfun',@(x)errorBarPlot(x,'xaxisvalues',X,plotargs{:}) , ...
+          'threed',1,'fixshape',1) ;
+      end
     end
   end
-elseif nargout==1, varargout={N}; 
+end
+if nargout==1, varargout={N}; 
 elseif nargout==2, varargout={N X};
 end

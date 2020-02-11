@@ -89,6 +89,13 @@ function result = RunExperiment ( doTrial, ex, params, blockStart )
 %  practiceTrials   = number of practice trials. If this is a multiple of
 %                     the number of trial types, there will be one of each
 %                     type.
+%                     If this is a vector, it will use those trials -
+%                     please note that it will wrap the values across
+%                     blocks e.g. if you have blocks of 10 trials, trial 12
+%                     will be block 2 trial 2. The block order will be the
+%                     default order (1:nBlocks). This can be used to set
+%                     specific trials, if shufflePracticeTrials is off (see
+%                     below).
 %
 %  shuffleTrials    = true if you want the trials in a random order in each 
 %                     block. Otherwise they will run in the order that the
@@ -142,7 +149,6 @@ function result = RunExperiment ( doTrial, ex, params, blockStart )
 %
 % Sanjay Manohar 2008
 
-
 % setup parameters
 
 % values of responseType, supplied by doTrial.
@@ -156,7 +162,6 @@ ex.R_UNSPECIFIED  = -94;            % experiment didn't provide a return value
 % Store the stack trace - so we know which .m experiment file was run 
 % to execute the experiment
 ex.experimentStack= dbstack;        
-fatal_error       = 0;              % true if the task must end suddenly
 % Store the file record for top-level function (i.e. experiment) 
 %  - includes the modification date and size! (2018) 
 ex.experimentFile = dir(which(ex.experimentStack(end).file)); 
@@ -167,6 +172,7 @@ if exist('params','var')           % if user specified a set of experimental
     if isfield(p,'params'), p=p.params; end
     fnames=fieldnames(p);           % override parameters from the original (ex)
     for x = 1:length(fnames);       % with those from the input structure (p).
+        override = 1;  % use values from params by default
         if isfield(ex,fnames{x})    % Is the field already in ex?
           if ~equals(p.(fnames{x}),ex.(fnames{x})) % if the values are unequal,
             if(isfield(p,'overrideParameters')) % if 'overrideParameters' is set, then use that value
@@ -177,12 +183,38 @@ if exist('params','var')           % if user specified a set of experimental
                     warning(['Using "' fnames{x} '" = "' ex.(fnames{x}) '" from experiment program.']);
                 end
             else                    % otherwise ask specifically for each parameter
-                override=(input(['Override "' fnames{x} '": "' p.(fnames{x}) ...
+                if isa(p.(fnames{x}), 'function_handle') && isa(ex.(fnames{x}), 'function_handle')
+                    override=(input(['Override "' fnames{x} '": "' char(p.(fnames{x})) ...
+                            '" instead of "' char(ex.(fnames{x})) '" (1/0) ?'] ))
+                elseif isa(p.(fnames{x}), 'numeric') || isa(p.(fnames{x}), 'logical')
+                    override=(input(['Override "' fnames{x} '": "' num2str(p.(fnames{x})) ...
+                            '" instead of "' num2str(ex.(fnames{x})) '" (1/0) ?'] ))
+                elseif isa(p.(fnames{x}),'struct') || isa(p.(fnames{x}), 'cell')
+                    % cannot convert to strings, so display var instead
+                    disp(fnames{x})
+                    disp(p.(fnames{x}))
+                    disp(ex.(fnames{x}))
+                    override=(input(['Override "' fnames{x} '" (see values above):  (1/0) ?'] ))
+                elseif isa(p.(fnames{x}), 'char')
+                    override=(input(['Override "' fnames{x} '": "' p.(fnames{x}) ...
                             '" instead of "' ex.(fnames{x}) '" (1/0) ?'] ))
+                else
+                    try % try to display values in line
+                        override=(input(['Override "' fnames{x} '": "' p.(fnames{x}) ...
+                            '" instead of "' ex.(fnames{x}) '" (1/0) ?'] ))
+                    catch % if that doesn't work because of class, just display them
+                        disp(fnames{x})
+                        ex.(fnames{x})
+                        p.(fnames{x})
+                        override=(input(['Override "' fnames{x} '" with param (see values above):  (1/0) ?'] ))
+                    end                    
+                end
             end
           end
         end % field exists?
-        ex.(fnames{x}) = p.(fnames{x});  % store field in ex
+        if override
+            ex.(fnames{x}) = p.(fnames{x});  % store field in ex
+        end
     end
     if isfield(params,'last')   last   =params.last; end    % go straight to the last-executed trial 
     if isfield(params,'data')   results=params.data; end    % keep results of old trials
@@ -211,6 +243,7 @@ result.startTimes   = {result.startTimes{:}, datestr(now,31)}; % store time of e
 if ~exist('blockStart','var') && isfield(ex,'blockStart'), blockStart= ex.blockStart; end
 if ~exist('exptStart','var') && isfield(ex,'exptStart'),   exptStart = ex.exptStart; end
 if ~isfield(ex,'blocks'), warning('Assuming 1 block only'); ex.blocks=1;end
+if ~isfield(ex,'deviceNumber'), ex.deviceNumber = -1; end % default is check all devices
 
 % added 2016 to cater for different random number generator in new Matlab    
 % (rand seed has been deprecated now)
@@ -292,6 +325,16 @@ try
     end;
     result.trials = trials;     % save trial structure in output
     result.params = ex;         % save experimental parameters in output
+    fatal_error   = 0; 
+
+    
+    % if we are sending synchronisation triggers to EEG and eye tracker, send
+    % end code
+    if isfield(ex, 'sendTriggers') && ex.sendTriggers && isfield(ex.trigValues, 'elKeyword')
+      trFake.block = 0; trFake.trialIndex = 0; % these needed for logevent
+      TeenseyTrigger(ex.trigValues.startExpt, ex.trigValues.startExpt,...
+             trFake, ex, el, 'startExpt');
+    end
 
     % call experiment start code, if provided
     if exist('exptStart')
@@ -300,23 +343,26 @@ try
 
     % Practice trials
     % if there are practice trials, and we're not continuing from before:
-    if isfield(ex,'practiceTrials') && ex.practiceTrials>0 && prod(last)==1 
+    if isfield(ex,'practiceTrials') && prod(last)==1 
         % create a new set of random trials for the practice, in the same way as
         % would be done for the real experiment. 
-        if isfield(ex,'blockorder')
-          ex_prac = rmfield(ex,'blockorder');
-        else
-          ex_prac = ex;
+        ex_prac = ex;
+        if(isfield(ex,'blockorder'))
+          ex_prac = rmfield(ex_prac,'blockorder'); 
         end
-        ex_prac.blocks = 1; 
-        ex_prac.blockLen = ex.practiceTrials; 
+        ex_prac.blocks = ex.blocks; 
+        %ex_prac.blockLen = ex.practiceTrials; 
+        if ex.practiceTrials ~= ex.blockLen
+            warning('practice doesnt contain all trial types');
+        end
         if isfield(ex, 'shufflePracticeTrials')
             ex_prac.shuffleTrials = ex.shufflePracticeTrials; 
         end
+        ex_prac.blockorder = 1:ex.blocks;
         % run create trials using the 'blockLen' of the practice trials. 
         % if this is a multiple of the number of trial types, then there
         % will be one of each trial type.
-        prac=createTrials(ex_prac); 
+        prac=createTrials2018(ex_prac); 
         
         if ex.useScreen % show "Practice" screen, and wait for keypress
             drawTextCentred(scr, 'Practice trials', ex.fgColour);
@@ -324,11 +370,23 @@ try
         else
           fprintf('Practice trials\n'); 
         end
-        KbWait; 
+        KbWait(ex.deviceNumber); 
         disp(prac)
-        for i=1:ex.practiceTrials % for each practice trial,
-          % take practice trials sequentially from the created trials
-          tr = prac(1+floor(i/ex.blockLen),1+mod(i,ex.blockLen));
+		
+        if numel(ex.practiceTrials) > 1%if ex.practiceTrials is a vector of trials to run
+            if all(size(ex.practiceTrials)> 1)%if it is a matrix
+                warning('ex.practiceTrials is a matrix. Practice trial order will run firstly by row, then by column');
+                NP = reshape(ex.practiceTrials,1,numel(ex.practiceTrials));%flatten, by row then column
+            else
+                NP = ex.practiceTrials ; % number of practice trials
+            end
+        else
+            NP = 1:ex.practiceTrials; %from 1:number of practice trials
+        end
+        
+        for i=1:numel(NP) % for each practice trial,
+          % run practice trials in order from NP
+          tr = prac(1+floor((NP(i)-1)/ex.blockLen),1+mod(NP(i)-1,ex.blockLen));
           tr.isPractice = true; % mark the trial as a practice.
           % Now run each practice trial, setting the block index as '0'.
           tr = runSingleTrialAndProcess(scr, el, ex, tr,doTrial,0,i); 
@@ -336,7 +394,7 @@ try
             % make sure the new practice trial structure is compatible
             [result.practiceResult,tr]=ensureStructsAssignable(result.practiceResult,tr);
           end
-          result.practiceResult(i)=tr; % store result in "practiceResult".
+          result.practiceResult(i)=tr; % store result in "practiceResult" in order they were run
           if tr.R == ex.R_ERROR || tr.R == ex.R_ESCAPE % if there was an error, 
             fatal_error=1; break;                       % exit practice trials 
           end
@@ -353,7 +411,7 @@ try
     else
         disp('Start of experiment - press a key');
     end
-    KbWait;               % press a key to start the experiment
+    KbWait(ex.deviceNumber);               % press a key to start the experiment
     
     
     if length(ex.blocks)==1, bnum=last(1):ex.blocks;
@@ -361,7 +419,7 @@ try
     end                   % continue from last block
     for b=last(1):ex.blocks
         if exist('blockStart','var')    % call the blockStart method if supplied
-            kcode = 1; while any(kcode) [z z kcode]=KbCheck; end;
+            kcode = 1; while any(kcode) [z z kcode]=KbCheck(ex.deviceNumber); end;
             FlushEvents '';
             tr=trials(b,1); tr.block = b; % allow the block start code to know which block we are in
             blockStart(scr,el,ex,tr);
@@ -412,9 +470,9 @@ try
         if ex.useScreen && ~exist('blockStart','var')
             drawTextCentred(scr, 'End of block', ex.fgColour);
             Screen('Flip', scr.w);
-            KbWait;                             % wait for keypress after each block
+            KbWait(ex.deviceNumber);                             % wait for keypress after each block
         end
-        [z z kcode]=KbCheck;
+        [z z kcode]=KbCheck(ex.deviceNumber);
         if kcode(ex.exitkey) || fatal_error,  break;  end
     end
     %%%%%%%%%%%%%  end of experiment %%%%%%%%%%%%%%%%%
@@ -429,6 +487,14 @@ catch                       % in case of an error
             result.data=results; % and still give back the data so far
         end
     end
+end
+
+% if we are sending synchronisation triggers to EEG and eye tracker, send
+% end code
+if isfield(ex, 'sendTriggers') && ex.sendTriggers && isfield(ex.trigValues, 'elKeyword') 
+  trFake.block = 0; trFake.trialIndex = 0; % these are needed for logEvent
+  TeenseyTrigger(ex.trigValues.endExpt, ex.trigValues.endExpt,...
+      trFake, ex, el, 'endExpt');
 end
 
 if(ex.useScreen)        

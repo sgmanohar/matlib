@@ -1,6 +1,6 @@
-function result=WaitForFixation(el, location, accuracy, duration)
+function result=WaitForFixation(el, location, accuracy, duration, deviceNumber)
 % Eyelink wait for fixation. result=WaitForFixation(el, location, accuracy,
-% duration)
+% duration, deviceNumer=-1)
 % Used at the beginning of experiment to wait for eye to fixate
 % on a spot. location (if not [0]) specifies required target, accuracy
 % specifies radius permitted around location, and duration is minimum time
@@ -9,6 +9,9 @@ function result=WaitForFixation(el, location, accuracy, duration)
 % uses global DCO - drift correct offset
 global DCO;
 if(~exist('DCO','var') || length(DCO)~=2) DCO=[0 0]; end;
+if ~exist('deviceNumber', 'var')
+    deviceNumber = -1;
+end
 
 s=Eyelink('newestfloatsample');
 if ~isstruct(s) % something went wrong accessing the eyelink - disconnected?
@@ -63,10 +66,10 @@ while cont
       end;
     end;
   end;
-  [z z keys]=KbCheck;
+  [z z keys]=KbCheck(deviceNumber);
   if(any(keys))
     if(keys(KbName('C')))
-      driftcorrect(location)
+      driftcorrect(location, el)
     else
       cont=0; result=0;
     end;

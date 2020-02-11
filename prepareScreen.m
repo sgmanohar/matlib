@@ -32,6 +32,15 @@ function scr=prepareScreen(ex)
 %                          default = display 0
 %  ex.useCedrus           - try to connect to a 'cedrus' button box on COM6
 % 
+%  ex.useAlpha            - load up alpha (transparency) for each image and
+%                           use that. also sets blendfunction to allow
+%                           transparency
+% 
+%  ex.usePPA              - if using PsychPortAudio audio device, do not
+%                           use audioplayer to load soundData into
+%                           soundPlayer as this can cause errors with
+%                           competing audio devices
+% 
 % Sanjay Manohar 2008
 
 % suppress the PTB 'Welcome' screen
@@ -46,6 +55,11 @@ end
 if ~isfield(ex,'displayNumber') ex.displayNumber=0; end;
 % Open the window
 [scr.w, scr.sszrect] = Screen('OpenWindow', ex.displayNumber, ex.bgColour);% [601 401 1400 1000]);
+
+if isfield(ex, 'useAlpha') && ex.useAlpha % set for transparency
+    Screen('BlendFunction', scr.w, 'GL_SRC_ALPHA', 'GL_ONE_MINUS_SRC_ALPHA');
+end
+
 Screen('Flip',scr.w);            % blank screen
 scr.ssz=scr.sszrect(:,3:4);      % get screen dimensions in px
 scr.centre=scr.ssz/2;            % centre of screen
@@ -72,12 +86,15 @@ if isfield(ex,'imageFiles')       % load images if requested
             end
         end
         % load image from file - the pixel data and the colour map.
-        [scr.imageData{i},scr.imageMap{i}] = imread(ex.imageFiles{i},type);
+        [scr.imageData{i},scr.imageMap{i},alpha] = imread(ex.imageFiles{i},type);
         % now make the PsychToolbox texture.
         if(isfield(ex,'imageAlpha')) % check if 'imageAlpha' is specified
             discrimImage1(scr.imageData{i}==ex.imageAlpha) = ex.bgColourIndex;
             scr.imageTexture(i)=Screen('MakeTexture', scr.w, ...
                cat(3, scr.imageData{i}, scr.imageData{i}==ex.bgColourIndex));
+        elseif isfield(ex, 'useAlpha') && ex.useAlpha
+            scr.imageTexture(i)=Screen('MakeTexture', scr.w, ...
+               cat(3, scr.imageData{i}, alpha));
         else
             scr.imageTexture(i)=Screen('MakeTexture', scr.w, ...
                 scr.imageData{i});
@@ -98,7 +115,9 @@ if isfield(ex,'soundFiles')           % preload sound files if required
       try                       
         if exist('audioread','file')  % try to read the file using audioread
             [scr.soundData{i}, scr.soundFs{i}]=audioread(ex.soundFiles{i});
-            scr.soundPlayer{i} = audioplayer(scr.soundData{i}, scr.soundFs{i});
+            if ~isfield(ex, 'usePPA') || ~ex.usePPA % don't load this if using PPA
+                scr.soundPlayer{i} = audioplayer(scr.soundData{i}, scr.soundFs{i});
+            end
         else                          % older versions of matlab:
             [scr.soundData{i}, scr.soundFs{i}] = wavread(ex.soundFiles{i});
         end

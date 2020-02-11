@@ -9,7 +9,7 @@ tr.allTrialIndex = t + (b-1)*ex.blockLen; % index relative to whole experiment
 tr.key=[];  tr.R=ex.R_INCOMPLETE;         % initialise trial exit status
 %  Iterate this trial as many times as needed to get a non-Incomplete result
 while  tr.R==ex.R_INCOMPLETE              % repeat trial immediately?
-  kcode = 1; while any(kcode) [z z kcode]=KbCheck; end;
+  kcode = 1; while any(kcode) [z z kcode]=KbCheck(ex.deviceNumber); end;
   FlushEvents;             % ensure no keys pressed at start of trial
   if ex.useEyelink         %%%% begin eye tracker recording
     Eyelink('startrecording');
@@ -43,17 +43,17 @@ while  tr.R==ex.R_INCOMPLETE              % repeat trial immediately?
   % ensure trial result structure is OK
   if ~isfield(tr,'key'), tr.key=[]; end              % well, it's just possible that you return a completely
   if ~isfield(tr,'R'),   tr.R=ex.R_UNSPECIFIED; end; % different structure to the one we provided!
-  
+
   % recheck keyboard, and execute special end-of-trial commands if needed
-  [z z kcode] = KbCheck;                             % is a key pressed at the end of the trial?
+  [z z kcode] = KbCheck(ex.deviceNumber);            % is a key pressed at the end of the trial?
   if kcode(ex.exitkey),  tr.key=ex.exitkey;  end;    % override repeat trial if escape pressed.
   if kcode(112),         allowinput(scr,ex); end;    % f1: allow modification of expt params
   if length(tr.key)>1,   tr.key=tr.key(1);   end;
   if isempty(tr.key) || tr.key==0,  tr.key=find(kcode); % expt provided no keypress data --> check our own
   else
     if tr.key=='R',   tr.R=ex.R_NEEDS_REPEATING; end;
-    if tr.key=='D' && ex.useEyelink, dodriftcorrection(el ); tr.R=ex.R_NEEDS_REPEATING;end;
-    if tr.key=='C' && ex.useEyelink, EyelinkDotrackersetup(el); tr.R=ex.R_NEEDS_REPEATING; end;
+    if tr.key=='D' && ex.useEyelink, EyelinkDoDriftCorrection(el ); tr.R=ex.R_NEEDS_REPEATING;end;
+    if tr.key=='C' && ex.useEyelink, EyelinkDoTrackerSetup(el); tr.R=ex.R_NEEDS_REPEATING; end;
     if tr.key==ex.exitkey,  tr.R=ex.R_ESCAPE;  end;
   end
   if ex.useEyelink            %%%% stop recording

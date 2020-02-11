@@ -134,6 +134,7 @@ info.sCurvA = []; % unsigned maximal curvature (radial acceleration)
 info.sCurvS = []; % signed maximal curvature 
 info.sDepA  = []; % angle of departure (where it leaves the 30-pixel circle)
 info.sSpd   = []; % maximum speed of eye during saccade
+info.sDur   = []; % duration of saccade
 
 for(i=1:length(s))  % for each trial
           scStart=nan; scEnd=nan; % start with blank values for this trial
@@ -470,7 +471,7 @@ for(i=1:length(s))  % for each trial
         
           scStartT(j)=nan; scVec(j)=nan; scEndpt(j)=nan; scBlink(j)=nan;
           scAmpl(j)=nan; scBendT(j)=nan; scBendR(j)=nan; scCurvA(j)=nan;
-          scCurvS(j)=nan; scDepA(j)=nan; scSpd(j)=nan; 
+          scCurvS(j)=nan; scDepA(j)=nan; scSpd(j)=nan; scEndT = nan;
           %info.sVec(end,j)=nan; info.sCurvA(end,j)=nan; info.sCurvS(end,j)=nan; info.sEndpt(end,j)=nan;
           %info.sBendT(end,j)=nan; info.sBendA(end,j)=nan;  info.sAmpl(end,j)=nan; info.sDepA(end,j)=nan;
         end % then reject this saccade
@@ -487,7 +488,7 @@ for(i=1:length(s))  % for each trial
       if ~exist('scStartT','var') || isempty(scStartT) % no saccades on this trial?
         scStartT=nan; scVec=nan; scEndPt=nan; scBlink=true;
         scAmpl=nan; scBendT=nan; scBendR=nan; scVec=nan;
-        scCurvA=nan; scCurvS=nan; scDepA=nan; scSpd=nan;
+        scCurvA=nan; scCurvS=nan; scDepA=nan; scSpd=nan; scEndT = nan;
       end
         % now add all the saccades on this trial to the global list of saccades
       info.sRT    = nancat(1, info.sRT,    scStartT'-t1);
@@ -501,6 +502,7 @@ for(i=1:length(s))  % for each trial
       info.sCurvS = nancat(1, info.sCurvS, scCurvS);
       info.sDepA  = nancat(1, info.sDepA,  scDepA);
       info.sSpd   = nancat(1, info.sSpd,   scSpd);
+      info.sDur   = nancat(1, info.sDur,   scEndT' - scStartT'); % duration 
   
   %%%% Browsing saccades
   % plot traces trial-by-trial and then pause - very useful for debugging.

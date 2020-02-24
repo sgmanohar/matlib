@@ -362,7 +362,7 @@ try
         % run create trials using the 'blockLen' of the practice trials. 
         % if this is a multiple of the number of trial types, then there
         % will be one of each trial type.
-        prac=createTrials2018(ex_prac); 
+        prac=createTrials(ex_prac); 
         
         if ex.useScreen % show "Practice" screen, and wait for keypress
             drawTextCentred(scr, 'Practice trials', ex.fgColour);

@@ -29,7 +29,13 @@ function [b bint r rint stats handles]=scatterRegress(X,Y, varargin)
 %               of the kernel.
 %   'ShowZero': If the axes include zero, draw a 'zero' line intersecting 
 %               the axis.
+%   'Text'    : 1 = Print the rho and p-values on the graph. 0=never,
+%               2=only if sig.
+%   'PlotLine': 0 = never plot line, 1 = always plot, 2 = only if sig.
+%               default = 1.
+%   'Alpha'   : alpha value for significance. default = .05
 % 
+
 PLOT_CI  = 1; % draw regression confidence intervals? 1 = if signif, 2= always
 FILL     = 1; % fill in the confidence interval
 FIT_SURF = 1; % use gridfit (for 3D data) to fit a z-surface
@@ -41,8 +47,8 @@ DEMEAN_Y_BY_COLUMN = true; % align each column's Y-values to the same mean?
 DENSITY  = 0;
 SHOW_ZERO = 1; % plot dotted lines at 'zero-zero', if within the axis
 ALPHA    = 0.05; % significance threshold for plotting confidence intervals
-SCATTERFUN = @scatter; % @scatterhist; 
-
+TEXT     = 1; % write rho & p values
+PLOTLINE = 1; % 1= always plot, 0 = never, 2 = only if sig
 
 i=find(strcmpi(varargin,'pearson'));
 if i, PEARSON=varargin{i+1}; varargin([i i+1])=[]; end
@@ -62,6 +68,12 @@ i=find(strcmpi(varargin,'Density'));
 if i, DENSITY=varargin{i+1}; varargin([i i+1])=[]; end
 i=find(strcmpi(varargin,'ShowZero'));
 if i, SHOW_ZERO=varargin{i+1}; varargin([i i+1])=[]; end
+i=find(strcmpi(varargin,'Text'));
+if i, TEXT=varargin{i+1}; varargin([i i+1])=[]; end
+i=find(strcmpi(varargin,'PlotLine'));
+if i, PLOTLINE=varargin{i+1}; varargin([i i+1])=[]; end
+i=find(strcmpi(varargin,'Alpha'));
+if i, ALPHA=varargin{i+1}; varargin([i i+1])=[]; end
 
 if ~exist('Y','var') || ~isnumeric(Y)
   if size(X,2)==2 && ndims(X==2)
@@ -69,11 +81,6 @@ if ~exist('Y','var') || ~isnumeric(Y)
   elseif size(X,2)==3 && ndims(X==2)
     Y=X(:,2);X=X(:,1);varargin=[{X(:,3)} varargin];
   end
-  XLABEL=[inputname(1) '(:,1)']; 
-  YLABEL=[inputname(1) '(:,2)'];
-else
-  XLABEL=inputname(1); 
-  YLABEL=inputname(2); 
 end
 
 ohold=ishold();
@@ -106,7 +113,7 @@ if ~isempty(varargin) && isvector(varargin{1}) && length(varargin{1})==length(X)
   signif  = prod(bint,2)>0; 
   symbols = {'X* ','Y* ','XY*'}; 
   anno    = [symbols{signif(1:3)}]; 
-  if any(anno)
+  if any(anno) && TEXT==1 || (TEXT==2&&signif)
     text(mean(xlim),max(ylim), anno);
   end
   axis vis3d
@@ -123,10 +130,13 @@ else % 2D data
     handles=[];
     for i=1:size(X,2)
       [b(i,:) bint(i,:,:) r(i,:) rint(i,:,:) stats(i,:) h] = scatterRegress(X(:,i),Y(:,i),...
-        varargin{:},'plot_ci',0,'pearson',PEARSON);  % pass on parameters, but don't do CI
+        varargin{:},'plot_ci',0,'pearson',PEARSON, 'plotline', PLOTLINE, 'showzero', SHOW_ZERO,...
+        'text',TEXT);  % pass on parameters, but don't do CI
       handles=[handles h]; % keep figure handles
       set(h(1), 'CData', colourMap(i,size(X,2)) );  % set colours to match.
-      set(h(2), 'Color', colourMap(i,size(X,2)) ) ;
+      if isprop(h(2), 'Color');
+        set(h(2), 'Color', colourMap(i,size(X,2)) ) ;
+      end
       hold on
     end 
   else % X is a vector, Y might be a matrix though
@@ -135,7 +145,7 @@ else % 2D data
     handles = [];
     for i=1:size(Yall,2) % do each column of Y separately
       Y=Yall(:,i); % select column
-      h=SCATTERFUN(X,Y, varargin{:});
+      h=scatter(X,Y, varargin{:});
       handles=[handles h];
       [b bint r rint stats] = regress(Y(:), [X(:), ones(size(Y(:)))]);
       if PEARSON
@@ -148,11 +158,13 @@ else % 2D data
       end
       isSignif = p<ALPHA;
       hold on;
-      h = plot(xlim(),b(1)*xlim()+b(2));
+      if PLOTLINE==1 || (PLOTLINE==2&& isSignif)
+        h = plot(xlim(),b(1)*xlim()+b(2));
+      end
       handles=[handles h];
       % annotation('textbox',[0.5,0.5, 0.1 0.1],'String',sprintf('r^2=%g\np=%g',stats(1),stats(3)), 'LineStyle','none')
-      text(mean(xlim),max(ylim),anno);
-      if PLOT_CI && exist('regression_line_ci') && (isSignif || PLOT_CI>1)
+      if TEXT==1 || (TEXT==2&&isSignif); text(mean(xlim),max(ylim),anno); end
+      if PLOT_CI && exist('regression_line_ci') && (PLOT_CI==1 || (isSignif && PLOT_CI==2))
         [top_int,bot_int,x_int]=regression_line_ci( 0.05, flipud(b), X(:),Y(:) , 100, min(xlim), max(xlim));
         colororder = get(gca,'colororder');
         if FILL
@@ -182,6 +194,4 @@ end
 if SHOW_ZERO && prod(ylim)<0
   plot(xlim,[0 0],':');
 end
-if ~isempty(XLABEL), xlabel(deCamel(XLABEL)); end
-if ~isempty(YLABEL), ylabel(deCamel(YLABEL)); end
 if(~ohold) hold off; end;

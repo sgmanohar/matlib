@@ -27,6 +27,12 @@ function [ t_test_result, p_vals, t_statistics, t_threshold, hplot ] ...
 %   TWO_TAILED = 0 or 1, default 1. 
 %      If this is 1, then test the hypothesis "is the contrast different from zero"
 %      If this is 0, then test the hypothesis "is the contrast greater than zero"
+%   NPERMS = number of permutations to run (default = 5000)
+%   CLUSTER = 1 to use clustering (default = 0).
+%   CLUSTERMETHOD = which clustering method to use:
+%                   'mass' = sums the t-statistics
+%                   'mean' = takes the mean of t-statistics
+%                   'size = looks at size of t-statistics
 %   
 % if the design is a column of ones, or is omitted, then I will 
 % put -1 or +1 randomly for the permutation test, 
@@ -72,11 +78,11 @@ if ~exist('group', 'var') || isempty(group),   group=ones(size(Y,1),1); end
 if ~isvector(group) || size(group,1)~=size(Y,1)
   error('there should be one grouping value per row of data');
 end
-[  alpha,  TWO_TAILED,   NPERMS,   CLUSTER,   CLUSTER_DIMS ] = parsepvpairs( ...
-  {'alpha','TWO_TAILED','NPERMS', 'CLUSTER', 'CLUSTERDIMS'},... % set default parameters
-  {0.05   , true       , 5000,    false    ,  1  } ,varargin{:});
+[  alpha,  TWO_TAILED,   NPERMS,   CLUSTER,   CLUSTER_DIMS, CLUSTERMETHOD ] = parsepvpairs( ...
+  {'alpha','TWO_TAILED','NPERMS', 'CLUSTER', 'CLUSTERDIMS', 'CLUSTERMETHOD'},... % set default parameters
+  {0.05   , true       , 5000,    false    ,  1, 'mass' } ,varargin{:});
 
-if CLUSTER, TWO_TAILED = false; end  
+% if CLUSTER, TWO_TAILED = false; end  
 ug=unique(group);                 % grouping variables - e.g. subjects?
 onesample_t =  sum(var(X))==0;    % are all rows of X the same? Then we need a 1-sample t-test.
 
@@ -87,11 +93,21 @@ group(badrow,:)=[];
 badsamp = any(isnan(Y),1); 
 Y(:,badsamp)=[]; 
 
+df = length(X) - 1;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 % 1. Estimate maximum t over all samples, 
 %    from the null distribution created by within-group permutation 
 t_wg_max = nan(size(C,1),NPERMS);  % this will store max and min t for each permutation
 t_wg_min = nan(size(C,1),NPERMS);  
+
+%%%%% thresholds for clustering
+if CLUSTER
+    thresh = tinv(1-alpha, df);
+    if TWO_TAILED
+        thresh = tinv(1-alpha/2, df);
+        thresh_neg = tinv(alpha/2, df);
+    end
+end
 for p=1:NPERMS % for each permutation 
   pX=X;                        % initialise the permuted version of X
   for j=1:length(ug)           % then for each group:
@@ -118,65 +134,246 @@ for p=1:NPERMS % for each permutation
     % then reduce it by a 1% quantile value each step
     % until the correct number of clusters is significant.
     % then record the thresholds required for this permutation.
-    thresh = t_wg_max(:,p); % start with a threshold where only one sample is significant
+%     thresh = t_wg_max(:,p); % start with a threshold where only one sample is significant
+
     for contrast = 1:size(t_wg,1) % for each contrast      
-      step = diff( quantile(t_wg(contrast,:) ,[0.9 0.91]) );
-      iter = 0;
-      while iter<100
+
         % find clusters of samples above the current threshold
         if ~isequal(CLUSTER_DIMS,1)
           img = reshape( t_wg(contrast,:), CLUSTER_DIMS );
-          cc = bwconncomp( img > thresh );
+          cc = bwconncomp( img >= thresh );
           n = cc.NumObjects;
         else
-          cc = findregions( t_wg(contrast,:) > thresh );
-          n = size(cc,1);
+          IdxList = findregions( t_wg(contrast,:) >= thresh );
+          n = size(IdxList,1);
+          cc = struct();
+          for i = 1:n
+              cc.PixelIdxList{i} = IdxList(i,1):min(IdxList(i,2), size(t_wg,2));
+          end
+          img = t_wg(contrast,:);
         end
-        if n>CLUSTER % if too many, stop
-          break
+        
+        % get cluster size, mean and mass
+        nClust(contrast,1) = n;
+        if n
+            try
+            [clustMaxSize(contrast,1), clustInd] = max([cellfun(@length, cc.PixelIdxList), 0]);
+            clustMean(contrast,1) = nanmean(img(cc.PixelIdxList{clustInd}));
+            clustMass(contrast,1) = nansum(img(cc.PixelIdxList{clustInd}));
+            catch
+                disp(1)
+            end
+        else
+            clustMaxSize = 0;
+            clustMean = 0;
+            clustMass = 0;
         end
-        iter=iter+1;
-        thresh(contrast) = thresh(contrast) - step; % gradually lower the threhold
-      end % while reducing threshold
+        
+        if TWO_TAILED
+            % find clusters of samples above the current threshold
+            if ~isequal(CLUSTER_DIMS,1)
+              img = reshape( t_wg(contrast,:), CLUSTER_DIMS );
+              cc = bwconncomp( img <= thresh_neg );
+              n = cc.NumObjects;
+            else
+              IdxList = findregions( t_wg(contrast,:) <= thresh_neg );
+              n = size(IdxList,1);
+              cc = struct();
+              for i = 1:n
+                  cc.PixelIdxList{i} = IdxList(i,1):min(IdxList(i,2), size(t_wg,2));
+              end
+              img = t_wg(contrast,:);
+            end
+
+            % get cluster size, mean and mass
+            nClustNeg(contrast,1) = n;
+            if n
+                [clustMaxSizeNeg(contrast,1), clustInd] = max([cellfun(@length, cc.PixelIdxList), 0]);
+                clustMeanNeg(contrast,1) = nanmean(img(cc.PixelIdxList{clustInd}));
+                clustMassNeg(contrast,1) = nansum(img(cc.PixelIdxList{clustInd}));
+            else
+                clustMaxSizeNeg(contrast,1) = 0;
+                clustMeanNeg(contrast,1) = 0;
+                clustMassNeg(contrast,1) = 0;
+            end
+        end
+            
     end % next contrast
-    t_wg_clu(:,p) = thresh; 
+    t_wg_clu_n(:,p) = nClust; 
+    t_wg_clu_mean(:,p) = clustMean;
+    t_wg_clu_mass(:,p) = clustMass;
+    
+    if TWO_TAILED
+        t_wg_clu_n_neg(:,p) = nClustNeg; 
+        t_wg_clu_mean_neg(:,p) = clustMeanNeg;
+        t_wg_clu_mass_neg(:,p) = clustMassNeg;
+    end
   end % if cluster
 end % next permutation
 
-if CLUSTER, t_wg_max = t_wg_clu; end
+if CLUSTER, t_wg_max = t_wg_clu_mean; end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 % 2. calculate the T corresponding to a FDR of alpha, for each contrast..
 %    t_statistics ( CONTRAST, SAMPLE )
 [beta,~,t_statistics] = ols(Y,X,C); % do least squares with the true regressors
-
+t_statistics(isnan(t_statistics)) = 0;
 if TWO_TAILED
-  upper_t_threshold = quantile(t_wg_max',1-alpha/2); % work out cutoff values of t corresponding 
-  lower_t_threshold = quantile(t_wg_min',  alpha/2); % to the required family-wise error rate 
-  t_test_result = bsxfun(@gt, t_statistics, upper_t_threshold') ...
-                - bsxfun(@lt, t_statistics, lower_t_threshold');       % put +1 or -1 if contrast is above or below zero
-  t_threshold  = cat(1,upper_t_threshold, lower_t_threshold); % T_THRESHOLD ( UPPER/LOWER, REGRESSOR )            
-  % For how many permutations is the maximum (across samples) permuted t-statistic 
-  % greater than the true t-statistic (for each sample)? If it is rarely
-  % above the real t, then p is small, because t is bigger than expected by
-  % chance.
-  p_vals_upper = mean( bsxfun(@gt, t_wg_max , permute(t_statistics, [1,3,2])) , 2  ); % mean across permutations,
-  % How often is the permuted minimum t-statistic across samples lower than 
-  % the true t-statistic of each sample? If it is rarely below the real t,
-  % then p is small, because t is lower than expected by chance.
-  p_vals_lower = mean( bsxfun(@lt, t_wg_min , permute(t_statistics, [1,3,2])) , 2  ); % for each contrast and sample
-  p_vals       = min( p_vals_upper, p_vals_lower );  % give whichever p-value is lower. Correct for 2-tails.
-  % the t_test_result will tell us which direction it it significant in.
-  % The returned p-value is close to 0 if either tail is significant, but
-  % must be tested with a threshold of ALPHA/2. 
+    
+    if CLUSTER
+        if ~isequal(CLUSTER_DIMS,1)
+          img = reshape( t_statistics, CLUSTER_DIMS );
+          cc = bwconncomp( img <= thresh_neg );
+          n = cc.NumObjects;
+        else
+          IdxList = findregions( t_statistics <= thresh_neg );
+          n = size(IdxList,1);
+          cc = struct();
+          for i = 1:n
+              cc.PixelIdxList{i} = IdxList(i,1):min(IdxList(i,2), size(t_statistics,2));
+          end
+          img = t_statistics(contrast,:);
+        end
+
+        % get cluster size, mean and mass
+        nClustNeg = n;
+        [clustMaxSizeNeg, clustMeanNeg, clustMassNeg] = deal(0);
+        for i = 1:n
+            clustMaxSizeNeg(i) = length(cc.PixelIdxList{i});
+            clustMeanNeg(i) = nanmean(img(cc.PixelIdxList{i}));
+            clustMassNeg(i) = nansum(img(cc.PixelIdxList{i}));
+        end
+
+        p_vals_lower = ones(1,1,size(Y,2));
+        for i = 1:n
+            switch CLUSTERMETHOD
+                case 'mean'
+%                     t_threshold_lower = quantile(t_wg_clu_mean_neg, alpha/2);
+                    p_vals_lower(1,1,cc.PixelIdxList{i}) = 1 - nanmean(clustMeanNeg(i) <= t_wg_clu_mean_neg);
+                case 'mass'
+%                     t_threshold_lower = quantile(t_wg_clu_mass_neg, alpha/2);
+                    p_vals_lower(1,1,cc.PixelIdxList{i}) = 1 - nanmean(clustMassNeg(i) <= t_wg_clu_mass_neg);
+                case 'size'
+%                     t_threshold_lower = quantile(t_wg_clu_n_neg, 1-alpha/2);
+                    p_vals_lower(1,1,cc.PixelIdxList{i}) = 1 - nanmean(clustMaxSizeNeg(i) >= t_wg_clu_n_neg);
+                otherwise 
+                    error('CLUSTERMETHOD must be "mean", "mass" or "size"')
+            end
+        end
+        
+        % now for upper
+        if ~isequal(CLUSTER_DIMS,1)
+          img = reshape( t_statistics, CLUSTER_DIMS );
+          cc = bwconncomp( img >= thresh );
+          n = cc.NumObjects;
+        else
+          IdxList = findregions( t_statistics(contrast,:) >= thresh );
+          n = size(IdxList,1);
+          cc = struct();
+          for i = 1:n
+              cc.PixelIdxList{i} = IdxList(i,1):min(IdxList(i,2), size(t_statistics,2));
+          end
+          img = t_statistics(contrast,:);
+        end
+
+        % get cluster size, mean and mass
+        nClust = n;
+        [clustMaxSize, clustMean, clustMass] = deal(0);
+        for i = 1:n
+            clustMaxSize(i) = length(cc.PixelIdxList{i});
+            clustMean(i) = nanmean(img(cc.PixelIdxList{i}));
+            clustMass(i) = nansum(img(cc.PixelIdxList{i}));
+        end   
+
+        p_vals_upper = ones(1,1,size(Y,2));
+        for i = 1:n
+            switch CLUSTERMETHOD
+                case 'mean'
+%                     t_threshold_upper = quantile(t_wg_clu_mean, 1-alpha/2);
+                    p_vals_upper(1,1,cc.PixelIdxList{i}) = 1 - nanmean(clustMean(i) >= t_wg_clu_mean);
+                case 'mass'
+%                     t_threshold_upper = quantile(t_wg_clu_mass, 1-alpha/2);
+                    p_vals_upper(1,1,cc.PixelIdxList{i}) = 1 - nanmean(clustMass(i) >= t_wg_clu_mass);
+                case 'size'
+%                     t_threshold_upper = quantile(t_wg_clu_n, 1-alpha/2);
+                    p_vals_upper(1,1,cc.PixelIdxList{i}) = 1 - nanmean(clustMaxSize(i) >= t_wg_clu_n);
+                otherwise 
+                    error('CLUSTERMETHOD must be "mean", "mass" or "size"')
+            end
+        end
+        
+        t_test_result = permute( (p_vals_lower < alpha/2)|(p_vals_upper<alpha/2), [1,3,2]);
+        p_vals = min(p_vals_upper, p_vals_lower);% give whichever p-value is lower. Correct for 2-tails.
+      % the t_test_result will tell us which direction it it significant in.
+      % The returned p-value is close to 0 if either tail is significant, but
+      % must be tested with a threshold of ALPHA/2. 
+    else
+      upper_t_threshold = quantile(t_wg_max',1-alpha/2); % work out cutoff values of t corresponding 
+      lower_t_threshold = quantile(t_wg_min',  alpha/2); % to the required family-wise error rate 
+      t_test_result = bsxfun(@gt, t_statistics, upper_t_threshold') ...
+                    - bsxfun(@lt, t_statistics, lower_t_threshold');       % put +1 or -1 if contrast is above or below zero
+      t_threshold  = cat(1,upper_t_threshold, lower_t_threshold); % T_THRESHOLD ( UPPER/LOWER, REGRESSOR )            
+      % For how many permutations is the maximum (across samples) permuted t-statistic 
+      % greater than the true t-statistic (for each sample)? If it is rarely
+      % above the real t, then p is small, because t is bigger than expected by
+      % chance.
+      p_vals_upper = mean( bsxfun(@gt, t_wg_max , permute(t_statistics, [1,3,2])) , 2  ); % mean across permutations,
+      % How often is the permuted minimum t-statistic across samples lower than 
+      % the true t-statistic of each sample? If it is rarely below the real t,
+      % then p is small, because t is lower than expected by chance.
+      p_vals_lower = mean( bsxfun(@lt, t_wg_min , permute(t_statistics, [1,3,2])) , 2  ); % for each contrast and sample
+      p_vals       = min( p_vals_upper, p_vals_lower );  % give whichever p-value is lower. Correct for 2-tails.
+      % the t_test_result will tell us which direction it it significant in.
+      % The returned p-value is close to 0 if either tail is significant, but
+      % must be tested with a threshold of ALPHA/2. 
+    end
 else % ONE TAILED
-  t_threshold   = quantile(t_wg_max',1-alpha);         % t cutoff values for given FWER 
-  % is the t-statistic bigger than alpha-percent of the permuted max-t
-  % statistics?
-  t_test_result = bsxfun(@gt, t_statistics, t_threshold');        % is the statistic bigger than the threshold?
-  % what proportion of the permuted maximum-t statistics are above the true
-  % t-statistic for each sample?
-  p_vals        = mean( bsxfun(@gt, t_wg_max , permute(t_statistics, [1,3,2])) , 2  ); 
+    if CLUSTER
+        if ~isequal(CLUSTER_DIMS,1)
+          img = reshape( t_statistics, CLUSTER_DIMS );
+          cc = bwconncomp( img >= thresh );
+          n = cc.NumObjects;
+        else
+          cc = findregions( t_wg >= thresh );
+          n = size(cc,1);
+        end
+        
+        nClust = n;
+        [clustMaxSize, clustMean, clustMass] = deal(0);
+        for i = 1:n
+            clustMaxSize(i) = length(cc.PixelIdxList{i});
+            clustMean(i) = nanmean(img(cc.PixelIdxList{i}));
+            clustMass(i) = nansum(img(cc.PixelIdxList{i}));
+        end
+        
+        p_vals = ones(1,1,size(Y,2));
+        for i = 1:n
+            switch CLUSTERMETHOD
+                case 'mean'
+                    t_threshold = quantile(t_wg_clu_mean, 1-alpha);
+                    p_vals(1,1,cc.PixelIdxList{i}) = clustMean(i) >= t_threshold;
+                case 'mass'
+                    t_threshold = quantile(t_wg_clu_mass, 1-alpha);
+                    p_vals(1,1,cc.PixelIdxList{i}) = clustMass(i) >= t_threshold;
+                case 'size'
+                    t_threshold = quantile(t_wg_clu_mass, 1-alpha);
+                    p_vals(1,1,cc.PixelIdxList{i}) = clustMaxSize(i) >= t_threshold;
+                otherwise 
+                    error('CLUSTERMETHOD must be "mean", "mass" or "size"')
+            end
+        end
+        t_test_result = ~permute(p_vals,[1,3,2]);
+    else
+        t_threshold   = quantile(t_wg_max',1-alpha);         % t cutoff values for given FWER 
+        t_test_result = bsxfun(@gt, t_statistics, t_threshold');        % is the statistic bigger than the threshold?
+        % is the t-statistic bigger than alpha-percent of the permuted max-t
+        % statistics?
+        p_vals        = mean( bsxfun(@gt, t_wg_max , permute(t_statistics, [1,3,2])) , 2  ); 
+        % what proportion of the permuted maximum-t statistics are above the true
+        % t-statistic for each sample?
+        
+    end
+
 end
 % P_VALS (CONTRAST, SAMPLE)
 p_vals = permute(p_vals,[1,3,2]);                    

@@ -24,7 +24,7 @@ end
   'kernel','windows','smooth','plotargs','contour', 'transform' },{
   'gauss',  [] ,  [] , {}, true, [] }, varargin{:});
 
-if isnumeric(D) 
+if isnumeric(D) && ~isempty(D)
   if isscalar(D), D=[D D]; end
 elseif ~iscell(D)
   D = [1 1] * floor(sqrt(length(X))); 
@@ -34,6 +34,10 @@ if isempty(SM), SM=floor(D(1)/10);end;
 % KERNEL = 'gauss'; % smoothing kernel
 % WINDOWS = 15;  % number of windows per line, for smoothing
 % SM = floor(D/WINDOWS); 
+
+if strcmpi(TRANSFORM,'log')
+  TRANSFORM = @(x)eps+log(x+eps); 
+end
 
 [h , c]= hist3(X,D); 
 if ~isempty(TRANSFORM)

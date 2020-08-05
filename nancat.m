@@ -111,6 +111,9 @@ for(i=2:length(varargin)) % for each operand
         if length(sizeV)<length(sizeC) % if there are extra dimensions in the current accumulated value
           sizeV=[sizeV ones(1,length(sizeC)-length(sizeV))]; % add on the extra dimensions as size 1
         end
+        if length(sizeV)>length(sizeC) % if there are fewer dims in the accumulator:
+          sizeC=[sizeC ones(1,length(sizeV)-length(sizeC))]; % add them on as ones
+        end
         if uneqdim(j)==DIM; continue; end % (except for the one you're catting along)
         d=uneqdim(j);
         if(sizeC(d)>sizeV(d)) % V is too small: add nans to d if it's shorter

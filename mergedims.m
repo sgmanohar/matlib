@@ -14,6 +14,8 @@ D = [ 1:dims(1)-1,  dims ];
 % find which dimensions will be trailing - the ones not included so far
 trailing = 1:ndims1(X);
 
+dims(dims>ndims1(X)) = []; % ignore dimensions higher than number available
+
 % trailing( any(trailing==D') ) = [];  % new version
 trailing( any( bsxfun( @eq, trailing, D' ) ) ) = [];
 D = [ D trailing ];                   % put them on the end

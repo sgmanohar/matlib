@@ -4,7 +4,8 @@ function Y = epoch_events(X,events, varargin)
 %   take the values of X( events(1):events(2) ), 
 %   X( events(2):events(3) ) etc., and make a matrix where 
 %   each column is a time series between a pair of events.
-%   the last column is X( event(end):end ).
+%   Note that data before event 1 is discarded, and 
+%   the last column is X( event(end):end ). 
 % 
 % if X and events are matrices, then operate on each column 
 % X(:,i), event(:,i), and return a 3-dimensional array.
@@ -17,12 +18,18 @@ function Y = epoch_events(X,events, varargin)
 % 'region': two-element array with [start, end]
 %   if region is supplied, then each column i of y is the data in a 
 %   window between event(i)+region(1) : event(i)+region(2)
+%
+% sgm 2018
 
 i=find(strcmp(varargin,'region'));
 if i>0
   region=varargin{i+1}; varargin([i i+1])=[];
 else
   region = []; 
+end
+
+if length(size(X))>2 || length(size(events))>2
+  error('not yet designed for nd-arrays. please use "apply".');
 end
 
 % for each column of X

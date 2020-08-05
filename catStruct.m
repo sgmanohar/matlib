@@ -38,11 +38,13 @@ if nargin<3 || ~ischar(varargin{2}) % is third param a string? if not,
         sz2=size(s2.(f{i}));
         if(length(sz1)~=length(sz2))
           fprintf('Field %s of structure %d has %d dimensions, not %d', f{i}, j, length(sz2), length(sz1));
-        elseif any( find(sz1~=sz2) ~= dim )
-          fprintf('Field %s of structure %d is mismatched; size is %d, not %d\n', f{i}, j, sz2, sz1);
-        else
-          sout.(f{i}) = catfunc( dim, sout.(f{i}), s2.(f{i}) );
+          continue;
         end
+        if any( find(sz1~=sz2) ~= dim )
+          bad = find(find(sz1~=sz2) ~= dim,1);
+          fprintf('Field %s of structure %d is mismatched; size is %d, not %d\n', f{i}, j, sz2(bad), sz1(bad));
+        end
+        sout.(f{i}) = catfunc( dim, sout.(f{i}), s2.(f{i}) );
       end
 
     end

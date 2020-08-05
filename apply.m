@@ -33,6 +33,8 @@ function Y = apply(f,X,varargin)
 %   calls corr on each pair of columns of X.
 % 'IgnoreErrors': if true, then if the function returns an error,
 %   insert nan ( or the value specified by 'PadErrors' )
+%
+% sgm 2018
 
 
 % which dimension(s) to pass to the function

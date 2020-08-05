@@ -218,6 +218,9 @@ if ~AREA % normal points/lines
     if (isrow(xaxisvalues) && iscolumn(Y)) || (iscolumn(Y)) && isrow(xaxisvalues)
       xaxisvalues=xaxisvalues';
     end;
+    if size(xaxisvalues,1)~=size(Y,1) && size(xaxisvalues,2)~=size(Y,2)
+      error('x axis values has the wrong shape');
+    end
     xaxisvalues=bsxfun(@(a,b)a,xaxisvalues, Y); % shape must match Y
   end
 

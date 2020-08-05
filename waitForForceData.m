@@ -30,10 +30,17 @@ function [squeezeData keys timeOfLastAcquisition] = waitForForceData(ex,...
 %  are acquired. You can do the drawing in here.
 
 
-EXIT = 0;
+EXIT = false;
 startRecordingTime = GetSecs;
+
+lastread=GetSecs;
+
+if ex.useSqueezy
+
 %%%% De-queue data from MP150
 % first dequeing is for all samples since the start of the acquisition.
+
+
 
 % Calculate how many samples need to be read from the MP150; sadly we
 % have to use  (last read-time) * (sample-rate) due to awful programming
@@ -44,7 +51,6 @@ record=nan*zeros(ex.MP_SAMPLE_RATE*ISI,2);
 lq = queueLen(timeOfLastAcquisition);
 buffer=nan*zeros(lq,1);
 [z buffer nread] = calllib(ex.mplib, 'receiveMPData', buffer,lq,0);
-lastread=GetSecs;
 %lastread=timeOfLastAcquisition+nread/2/ex.MP_SAMPLE_RATE; % update last read time.
 record(1:(nread/2),:)=[buffer(1:2:nread) buffer(2:2:nread)]; % store both channels
 nTotalRead=nread/2; 
@@ -83,5 +89,93 @@ while(GetSecs < startRecordingTime + maxTimeToWait && ~EXIT)              % how 
         % a vector with two elements, one for each channel)
     end
 end
+
+elseif ex.useLabjack
+  % reading from the labjack is considerably simpler than reading from the
+  % MP150 - since we can get away without queueing I think?
+  record = [];
+  
+  currtm = GetSecs;
+  nTotalRead = 0;
+  while EXIT == false
+    % Execute the requests.
+    ex.ljudObj.GoOne(ex.ljhandle);
+    
+    % Get all the results.  The input measurement results are stored. All
+    % other results are for configuration or output requests so we are just
+    % checking whether there was an error.
+    xtm=GetSecs-currtm;
+    [ljerror, ioType, chan1, v0, dummyInt, dummyDbl] = ex.ljudObj.GetFirstResult(ex.ljhandle, 0, 0, 0, 0, 0);
+    [ljerror, ioType, chan2, v1, dummyInt, dummyDbl] = ex.ljudObj.GetNextResult( ex.ljhandle, 0, 0, 0, 0, 0);
+
+    nTotalRead = nTotalRead + 1; % keep track of how many samples read
+    record(nTotalRead,:) = [ v0, v1 xtm ]; % changed from xtm for consistency
+    
+    if xtm > maxTimeToWait
+      EXIT = true; 
+    end
+    pause(0.002) % wait 2 milliseonds  = 500 Hz
+
+    if nTotalRead>20
+      mu  = mean( record((nTotalRead-20):nTotalRead, :) );       % 20ms mean force
+      mud = mean( diff(record((nTotalRead-20):nTotalRead, :)) ); % 20ms mean differential
+      if any(mu > stopRecordingAtThreshold)
+        EXIT = true;
+      end
+    end
+    
+    [keyisdown,secs,keycode] = KbCheck; % check for real key
+    keys=find(keycode);
+    if(any(keys==27)) EXIT=1; end         % check for ESCAPE
+    if keys(KbName('LeftArrow'))
+      record(end+1,:) = [ inf 0 0 ]; % like a squeeze on channel 1
+      EXIT = 1;
+    end
+    if keys(KbName('RightArrow'))
+      records(end+1,:) = [ 0 inf 0 ]; % on channel 2
+      EXIT = 1; 
+    end
+    
+    
+    if exist('continuousFeedbackFunction','var')&& exist('mu','var')
+      continuousFeedbackFunction( mu ); % if the user supplied a feedback
+      % function, call it now with the mean force over last 20ms (this is
+      % a vector with two elements, one for each channel)
+    end
+
+  end  %  while requestedExit == false
+  
+  
+else % no squeezy or labjack? 
+  % keyboard dummy version (for testing)
+  keys = 1;  % wait for all keyboard keys to be releaed
+  while any(keys),
+    [~,~,keys] = KbCheck();
+  end
+  record=[]; 
+  t = GetSecs;
+  % wait for a keypress
+  while ~any(keys) && (GetSecs < t+maxTimeToWait)
+    [~,~,keys] = KbCheck();
+    if keys(KbName('LeftArrow'))
+      record = [record; [inf 0 0] ];
+    elseif keys(KbName('RightArrow'))
+      record = [record; [0 inf 0] ];
+    else
+      record = [record; [0 0 0] ];
+    end
+    pause(0.002);
+    if exist('continuousFeedbackFunction','var')
+      continuousFeedbackFunction( [1 1] ); % if the user supplied a feedback
+    end
+  end
+end
+
+
+
 squeezeData = record; % send back the actual data recorded
 timeOfLastAcquisition = lastread; % send back the time we last read the device
+
+
+
+

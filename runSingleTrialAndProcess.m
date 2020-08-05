@@ -33,8 +33,10 @@ while  tr.R==ex.R_INCOMPLETE              % repeat trial immediately?
       calllib(ex.mplib, 'disconnectMPDev');
       error('Failed to start squeezy acquisition');
     end
-    tr=LogEvent(ex,el,tr,'startSqueezyAcquisition');
   end
+  % putting this outside the "if" allows you to run squeezy tasks without a
+  % squeezy
+  tr=LogEvent(ex,el,tr,'startSqueezyAcquisition');
   
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Call External doTrial routine
   tr = doTrial(scr, el, ex, tr);
@@ -54,6 +56,13 @@ while  tr.R==ex.R_INCOMPLETE              % repeat trial immediately?
     if tr.key=='R',   tr.R=ex.R_NEEDS_REPEATING; end;
     if tr.key=='D' && ex.useEyelink, EyelinkDoDriftCorrection(el ); tr.R=ex.R_NEEDS_REPEATING;end;
     if tr.key=='C' && ex.useEyelink, EyelinkDoTrackerSetup(el); tr.R=ex.R_NEEDS_REPEATING; end;
+    if tr.key=='P' % Pause?
+      kcode = 1; while any(kcode) [z z kcode]=KbCheck(ex.deviceNumber); end;
+      FlushEvents '';      % empty key buffer
+      drawTextCentred(scr, 'Paused: Press a key to resume.', ex.fgColour);
+      Screen('Flip', scr.w);
+      KbWait(ex.deviceNumber); % wait for keypress to resume
+    end;
     if tr.key==ex.exitkey,  tr.R=ex.R_ESCAPE;  end;
   end
   if ex.useEyelink            %%%% stop recording

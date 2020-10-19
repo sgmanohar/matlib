@@ -103,7 +103,11 @@ end
 %%%%%%%%%%%%% Actually fit the model here %%%%%%%%%%%%%%%  
 if exist('fitglme','file'),  fitfun = @fitglme;
 else                         fitfun = @fitlme;   end
-Lmodel = fitfun(t,model, varargin{:});
+Lmodel = fitfun(t,model, 'dummyvarcoding','effects', varargin{:});
 %model = fitglme(t,model, varargin{:});
-A = anova(Lmodel);
+try % if we have newer stats toolbox: use satterthwaite correction for DF
+  A = anova(Lmodel,'dfmethod','satterthwaite');
+catch % otherwise use residual DF 
+  A = anova(Lmodel);
+end
 

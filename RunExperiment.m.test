@@ -167,17 +167,11 @@ ex.experimentStack= dbstack;
 ex.experimentFile = dir(which(ex.experimentStack(end).file)); 
 
 last = [1 1];                       % block and trial to start at
-% fields from inputs that should not override current params
-ignoreParamFields = {'experimentStack','experimentFile'};
 if exist('params','var')           % if user specified a set of experimental 
     p=params;                       % parameters in the input parameters,
     if isfield(p,'params'), p=p.params; end
     fnames=fieldnames(p);           % override parameters from the original (ex)
     for x = 1:length(fnames);       % with those from the input structure (p).
-        % ignore fields?
-        if any(strcmpi(fnames{x}, ignoreParamFields))
-          continue
-        end
         override = 1;  % use values from params by default
         if isfield(ex,fnames{x})    % Is the field already in ex?
           if ~equals(p.(fnames{x}),ex.(fnames{x})) % if the values are unequal,
@@ -272,7 +266,6 @@ if exist('trials')~=1,  trials = createTrials(ex); end;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 e=[]; % this carries any errors
-fatal_error   = 0;
 try     
     % Enable unified mode of KbName,
     % so KbName accepts identical key names on all operating systems:
@@ -296,23 +289,6 @@ try
       end
       calllib(ex.mplib, 'setSampleRate', 1000/ex.MP_SAMPLE_RATE); % ms between samples
       calllib(ex.mplib, 'setAcqChannels', int32([1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ]));  % which of 16 channels?
-    end
-    
-    
-    if ex.useLabjack
-      ex.ljasm = NET.addAssembly('LJUDDotNet');
-      ex.ljudObj = LabJack.LabJackUD.LJUD;
-      % Read and display the UD version.
-      disp(['UD Driver Version = ' num2str(ex.ljudObj.GetDriverVersion())])
-      % Open the first found LabJack U3.
-      [ljerror, ex.ljhandle] = ex.ljudObj.OpenLabJackS('LJ_dtU3', 'LJ_ctUSB', '0', true, 0);
-      % assignments are in the factory default condition.
-      ex.ljudObj.ePutS(ex.ljhandle, 'LJ_ioPIN_CONFIGURATION_RESET', 0, 0, 0);
-      
-      % Request a single-ended reading from AIN0m  and AIN1.
-      ex.ljudObj.AddRequestS(ex.ljhandle, 'LJ_ioGET_AIN', 0, 0, 0, 0);
-      ex.ljudObj.AddRequestS(ex.ljhandle, 'LJ_ioGET_AIN', 1, 0, 0, 0);
-      ex.LJE_NO_MORE_DATA_AVAILABLE = ex.ljudObj.StringToConstant('LJE_NO_MORE_DATA_AVAILABLE');      
     end
     
     datestring=datestr(now,30);
@@ -349,6 +325,7 @@ try
     end;
     result.trials = trials;     % save trial structure in output
     result.params = ex;         % save experimental parameters in output
+    fatal_error   = 0; 
 
     
     % if we are sending synchronisation triggers to EEG and eye tracker, send
@@ -499,28 +476,17 @@ try
         if kcode(ex.exitkey) || fatal_error,  break;  end
     end
     %%%%%%%%%%%%%  end of experiment %%%%%%%%%%%%%%%%%
-catch exc                  % in case of an error  
-  % handle labjack errors:
-  if(isa(exc, 'NET.NetException'))
-    eNet = exc.ExceptionObject;
-    if(isa(eNet, 'LabJack.LabJackUD.LabJackUDException'))
-      disp(['UD Error: ' char(eNet.ToString())])
-    else
-      disp(['.NET Error: ' char(eNet.ToString())])
+catch                       % in case of an error
+    e=lasterror;            % display error message
+    fprintf('Error : %s\n',...
+        e.message);
+    for(i=1:length(e.stack))
+        disp(e.stack(i));
+        save 'errordump';
+        if exist('results','var')
+            result.data=results; % and still give back the data so far
+        end
     end
-  end
-  disp(getReport(exc))
-  
-  e=lasterror;            % display error message
-  fprintf('Error : %s\n',...
-    e.message);
-  for(i=1:length(e.stack))
-    disp(e.stack(i));
-    save 'errordump';
-    if exist('results','var')
-      result.data=results; % and still give back the data so far
-    end
-  end
 end
 
 % if we are sending synchronisation triggers to EEG and eye tracker, send
@@ -550,15 +516,10 @@ if ex.useSqueezy        % close squeezy device
   unloadlibrary('mpdev');
   fprintf('disconnecting MP150\n');
 end
-if ex.useLabjack        % close labjack device
-  ex.ljudObj.Close();
-end
-
-
 FlushEvents '';
 ShowCursor;             % show the mouse cursor again
 
-if fatal_error && exist('tr','var') && isfield(tr,'R') % if ending abruptly, explain why
+if fatal_error && exist('tr','var') % if ending abruptly, explain why
   if tr.R == ex.R_ESCAPE            % was escape pressed?
     fprintf('Exiting -- Escape key pressed\n');
     fprintf('If this was unintentional, you might be able to resume the experiment by re-running it\n');    

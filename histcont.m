@@ -122,3 +122,4 @@ end
 if nargout==1, varargout={N}; 
 elseif nargout==2, varargout={N X};
 end
+

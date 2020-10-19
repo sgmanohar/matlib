@@ -4,6 +4,7 @@ function stat = vlsm(I, X, varargin)
 % regress behaviour against lesion degree in each voxel.
 % I = imaging ( x,y,z, subjects )
 % X = design matrix ( subject, regressor )
+%     each column is run in a separate VLSM.
 % RANKED      = 0   % rank transform before t-test
 % PERMUTATION = 0   % run permutation test instead of plain t test
 % FILTER_N    = 4   % how many patients need to have lesions in a voxel to warrant analysing it
@@ -275,10 +276,10 @@ switch PLOT
     lightbox_images_for_thesis( x , regressor_names ,'invert',0, 'dim', DIM)
     xlower=x;
     if SAVE_PNG
-      figure(1); export_fig(sprintf('%s_positive_mirror%g_smooth%g_numthresh%g_presmooth%g_perm%g_p%g.png',...
-        SAVE_PNG, MIRROR, POSTSMOOTH, MINPOWERN, PRESMOOTH, PERMUTATION, ALPHA));
-      figure(2); export_fig(sprintf('vlsm_negative_mirror%g_smooth%g_numthresh%g_presmooth%g_perm%g_p%g.png',...
-        SAVE_PNG, MIRROR, POSTSMOOTH, MINPOWERN, PRESMOOTH, PERMUTATION, ALPHA));
+      figure(1); saveas(gcf,sprintf('%s_positive_mirror%g_smooth%g_numthresh%g_presmooth%g_perm%g_p%g.png',...
+        SAVE_PNG, MIRROR, POSTSMOOTH, MINPOWERN, PRESMOOTH, PERMUTATION, ALPHA),'png');
+      figure(2); saveas(gcf,sprintf('vlsm_negative_mirror%g_smooth%g_numthresh%g_presmooth%g_perm%g_p%g.png',...
+        SAVE_PNG, MIRROR, POSTSMOOTH, MINPOWERN, PRESMOOTH, PERMUTATION, ALPHA),'png');
     end
 end
 

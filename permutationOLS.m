@@ -33,6 +33,7 @@ function [ t_test_result, p_vals, t_statistics, t_threshold, hplot ] ...
 %                   'mass' = sums the t-statistics
 %                   'mean' = takes the mean of t-statistics
 %                   'size = looks at size of t-statistics
+%   CLUSTERDIMS = dimensions to reshape to if clustering in 2D e.g. [50 50]
 %   
 % if the design is a column of ones, or is omitted, then I will 
 % put -1 or +1 randomly for the permutation test, 

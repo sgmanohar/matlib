@@ -1,4 +1,4 @@
-function O = analyseFixationPeriod(A, info, condition, timerange, FFT)
+function O = analyseFixationPeriod(A, info, condition, timerange, FFT, ppd)
 % A ( trial, time ) = eye position as a function of time
 % Provide stats on a fixation period, including
 %  - microsaccades as a function of time
@@ -10,6 +10,10 @@ function O = analyseFixationPeriod(A, info, condition, timerange, FFT)
 %        microsaccades.
 % 
     
+if ~exist('ppd','var') || isempty(ppd)
+    ppd = 33; % pixels per visual degree
+end
+
 Exclude.blinks    = true; % blinks within the period of interest?
 Exclude.saccades  = true; % macro-saccades within period?
 Exclude.deviation = true ; % deviation from fixation?
@@ -17,8 +21,8 @@ Exclude.deviation = true ; % deviation from fixation?
 sAmp    = info.sAmpl;
 sRT     = info.sRT;
 sBlink  = info.sBlink;
-sMacro  = sAmp>1*33;            % exclude macrosaccades
-sMicro  = sAmp<1*33;            % include microsaccades
+sMacro  = sAmp>1*ppd;            % exclude macrosaccades
+sMicro  = sAmp<=1*ppd;            % include microsaccades
 sInTime = sRT>timerange(1) & sRT<timerange(2);  % times counted within the fixation period
 % maximum deviaiton of eye position from mean position on each trial
 % (sometimes missed by macrosaccades!)
@@ -28,7 +32,7 @@ maxdev = max(abs(bsxfun(@minus, A(:,timerange(1):timerange(2)),...
 
 badTr  = any(sBlink>0 & sInTime,2) | ...
          any(sMacro & sInTime,2)   | ...
-         maxdev > 1.8*33;
+         maxdev > 1.8*ppd;
 
 if ~exist('FFT','var'); FFT   = true; end
 PLOT  = false;
@@ -108,11 +112,11 @@ end
 
 sDur = info.sDur; % duration
 t = repmat(timerange(1):timerange(2), [size(sRT,1),1]);
-for i = 1:size(sRT,2)
+for i = 1:size(sRT,2) % exclude times within the saccades
     t1(:,:,i) = t > sRT(:,i) & t < (sRT(:,i)+sDur(:,i));
 end
 saccInds = any(t1,3);
-A2 = A;
+A2 = A(:, timerange(1):timerange(2));
 A2(saccInds) = NaN;
 
 speed = abs(diff(A2, [],2));

@@ -151,7 +151,7 @@ C=permute(cell, permorder);
 % now collapse all other dimensions
 C=reshape(C, sz(DIM(1)),[]); 
 for i=1:size(C,2) % for all other dimensions
-  if any(cellfun(@isempty,C(:,i))), warning('nancat is leaving out empty cells'); end
+  if any(cellfun(@isempty,C(:,i))), warning('NANCAT:emptyCells', 'nancat is leaving out empty cells'); end
   out{i} = nancat( DIM(2), C{:,i} ); 
 end
 % then make shape of new cell the same as original cell, except collapsed

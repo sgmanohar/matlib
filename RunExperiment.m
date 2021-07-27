@@ -189,35 +189,29 @@ if exist('params','var')           % if user specified a set of experimental
                     warning(['Using "' fnames{x} '" = "' ex.(fnames{x}) '" from experiment program.']);
                 end
             else                    % otherwise ask specifically for each parameter
-                if isa(p.(fnames{x}), 'function_handle') && isa(ex.(fnames{x}), 'function_handle')
-                    override=(input(['Override "' fnames{x} '": "' char(p.(fnames{x})) ...
-                            '" instead of "' char(ex.(fnames{x})) '" (1/0) ?'] ))
-                elseif isa(p.(fnames{x}), 'numeric') || isa(p.(fnames{x}), 'logical')
-                    override=(input(['Override "' fnames{x} '": "' num2str(p.(fnames{x})) ...
-                            '" instead of "' num2str(ex.(fnames{x})) '" (1/0) ?'] ))
-                elseif isa(p.(fnames{x}),'struct') || isa(p.(fnames{x}), 'cell')
-                    % cannot convert to strings, so display var instead
+                try % try to print values nicely
+                    if isa(p.(fnames{x}), 'function_handle') && isa(ex.(fnames{x}), 'function_handle') % if a function
+                        override=(input(['Override ex "' fnames{x} '": "' char(ex.(fnames{x})) ...
+                                '" with params: "' char(p.(fnames{x})) '" (1/0) ?'] ))
+                    elseif isa(p.(fnames{x}), 'numeric') || isa(p.(fnames{x}), 'logical') % if numbers
+                        override=(input(['Override ex "' fnames{x} '": "' num2str(ex.(fnames{x})) ...
+                                '" with params "' num2str(p.(fnames{x})) '" (1/0) ?'] ))
+                    elseif isa(p.(fnames{x}), 'char') % if characters
+                        override=(input(['Override ex "' fnames{x} '": "' ex.(fnames{x}) ...
+                                '" with params "' p.(fnames{x}) '" (1/0) ?'] ))
+                    else % try this
+                        override=(input(['Override ex "' fnames{x} '": "' ex.(fnames{x}) ...
+                            '" with params "' p.(fnames{x}) '" (1/0) ?'] ))
+                    end
+                catch % if that doesn't work because of class, just display them
                     disp(fnames{x})
-                    disp(p.(fnames{x}))
                     disp(ex.(fnames{x}))
-                    override=(input(['Override "' fnames{x} '" (see values above):  (1/0) ?'] ))
-                elseif isa(p.(fnames{x}), 'char')
-                    override=(input(['Override "' fnames{x} '": "' p.(fnames{x}) ...
-                            '" instead of "' ex.(fnames{x}) '" (1/0) ?'] ))
-                else
-                    try % try to display values in line
-                        override=(input(['Override "' fnames{x} '": "' p.(fnames{x}) ...
-                            '" instead of "' ex.(fnames{x}) '" (1/0) ?'] ))
-                    catch % if that doesn't work because of class, just display them
-                        disp(fnames{x})
-                        ex.(fnames{x})
-                        p.(fnames{x})
-                        override=(input(['Override "' fnames{x} '" with param (see values above):  (1/0) ?'] ))
-                    end                    
-                end
+                    disp(p.(fnames{x}))
+                    override=(input(['Override ex "' fnames{x} '" with params? (see values above):  (1/0) ?'] ))
+                end                 
             end
           end
-        end % field exists?
+        end
         if override
             ex.(fnames{x}) = p.(fnames{x});  % store field in ex
         end

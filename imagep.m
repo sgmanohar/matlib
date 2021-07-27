@@ -28,7 +28,7 @@ sign=(p>0)-(p<0); p=abs(p); % keep track of sign
 sign(sign==0)=1; % p-values of zero are taken to be +0.00001
 % are any of the nonzero p-values significant? if so, threshold image at p=0.05
 if any(p(p>0)< ALPHA), p(p>ALPHA)=1; end % otherwise plot all values
-if 0
+if 1
   p(p<eps)=eps; % log(0) = inf, so use log(eps) instead -- gives approximately 16.
 else
   p(p<eps)=1; % count zeros as p=1

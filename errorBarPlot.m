@@ -30,7 +30,7 @@ function varargout = errorBarPlot(X, varargin)
 %                before averaging and taking std error. then add on the
 %                mean before plotting.
 %           'withinSubjectError' - subtract subjects' intercepts before
-%                calculating error bars. Default 0.
+%                calculating error bars. Default 1.
 %           'standardError': 1 = use SEM for error bars (default).
 %                2 = use standard deviation
 %                between 0 and 0.5: use percentile above and below median
@@ -66,7 +66,7 @@ try
     'type' , 'meanfun','plotIndividuals','doStats','statargs', 'labels'}, ...
     {[], false, 0.5,     [],         1,       {} , ...
      DEFAULT_WITHIN_SUBJECT_ERROR, 1,     5000,   [],     [] ...
-     'line', @nanmean ,false, [], {}, {}}, ... 
+     'line', @nanmean ,false, 0, {}, {}}, ... 
     varargin{:});
   varargin={};
 catch me
@@ -198,8 +198,8 @@ elseif STANDARD_ERROR ==2 % use standard deviation?
   yerror  = sq(sqrt(nanvar(Xm,[],1)));
   yerrorm = yerror;
 elseif STANDARD_ERROR < 0.5 && STANDARD_ERROR > 0 % treat fraction as percentile for bar
-  yerror  =   quantile(Xm, 0.5+STANDARD_ERROR) - fmean(Xm);
-  yerrorm = -(quantile(Xm, 0.5-STANDARD_ERROR) - fmean(Xm));
+  yerror  =   sq(quantile(Xm, 0.5+STANDARD_ERROR) - fmean(Xm));
+  yerrorm = sq(-(quantile(Xm, 0.5-STANDARD_ERROR) - fmean(Xm)));
 else              % bootstrap confidence interval at 5%
   yerror  = bootci(NBOOT, {fmean, Xm}, 'type', 'bca');
   yerrorm = -squeeze(yerror(1,:,:,:))+squeeze(fmean(Xm)); % minus errors
@@ -218,9 +218,6 @@ if ~AREA % normal points/lines
     if (isrow(xaxisvalues) && iscolumn(Y)) || (iscolumn(Y)) && isrow(xaxisvalues)
       xaxisvalues=xaxisvalues';
     end;
-    if size(xaxisvalues,1)~=size(Y,1) && size(xaxisvalues,2)~=size(Y,2)
-      error('x axis values has the wrong shape');
-    end
     xaxisvalues=bsxfun(@(a,b)a,xaxisvalues, Y); % shape must match Y
   end
 
@@ -239,7 +236,7 @@ if ~AREA % normal points/lines
       h=barwitherr(cat(3, yerror, -yerrorm), xaxisvalues, Y, plotargs{:});
       if PLOT_INDIVIDUALS  % individuals as circles
         hold on;
-        plot(xaxisvalues, X,'o',plotargs{:});  
+        plot(xaxisvalues, X','o',plotargs{:});  
       end
   end
   if WIDTH, errorbarT(h,WIDTH); end % adjust witdth of bars

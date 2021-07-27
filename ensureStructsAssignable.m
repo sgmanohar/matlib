@@ -1,9 +1,14 @@
-function [d,s]=ensureStructsAssignable(d,s)
-% [dest, source] = ensureStructsAssignable(dest, src)
+function [d,s]=ensureStructsAssignable(d,s,DEBUG)
+% [dest, source] = ensureStructsAssignable(dest, src,DEBUG)
 % pad and reorder the fields of the structs so that it is possible to
 % assign one to another in the form dest(x)=src
+% 
+% DEBUG: 1=print messages whenever mismatch. 0 = don't
+% 
 sf=fieldnames(s);                 % field names from source
-DEBUG=true;                       % set this to false to prevent messages
+if ~exist('DEBUG','var')
+    DEBUG=true;                       % set this to false to prevent messages
+end
 for i=1:length(sf)                % for each source field
   if ~isfield(d,sf{i})            % is it missing in the destination?
     if DEBUG, fprintf('dest does not contain %s\n',sf{i}); end

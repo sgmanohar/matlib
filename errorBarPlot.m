@@ -232,6 +232,9 @@ if ~AREA % normal points/lines
         end
       end
     case 'bar', 
+      if all(size(Y)>1)
+          xaxisvalues = [1:size(Y,1)]';
+      end
       % plot bar with errorbars
       h=barwitherr(cat(3, yerror, -yerrorm), xaxisvalues, Y, plotargs{:});
       if PLOT_INDIVIDUALS  % individuals as circles

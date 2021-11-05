@@ -46,7 +46,7 @@ if exist('xlabels','var') && ~isempty(xlabels)
   end
   set(gca,'xtick',1:length(xlabels),'xticklabel',xlabels);
   if ROTATE
-    rotateXLabels(gca,90);
+    xtickangle(gca,90);
     set(gca,'XAxisLocation','bottom');
   end
 end

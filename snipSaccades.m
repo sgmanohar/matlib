@@ -309,6 +309,8 @@ for(i=1:length(s))  % for each trial
               if ~isempty(departT)   scDepA(j) = angle( scPath(departT) ); 
               else scDepA(j)=nan;  % only valid for larger saccades.
               end
+            else
+                scSpd(j)=nan; scDepA(j)=nan;scCurvT(j)=nan;scCurvS=nan;
             end
           end
         end

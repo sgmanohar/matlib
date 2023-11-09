@@ -198,6 +198,9 @@ else  plotargs={};
 end
 
 DO_STATS = nargout>2; % whether to do statistics?
+i=find(strcmpi(varargin,'DoStats')); if i
+  DO_STATS = varargin{i+1}; varargin([i i+1])=[]; 
+end
 DO_STATS_PLOT = nargout > 4; 
 i=find(strcmpi(varargin,'plotstats')); if i
   DO_STATS_PLOT = varargin{i+1}; varargin([i i+1])=[]; 
@@ -420,8 +423,8 @@ else % SLIDING BIN = we have a whole curve to plot
         DES, [0 1], ...            % statistics: contrast for linear effect of conditions
         repmat([1:NS]', NC,1)  );  % group by subject (i.e. permute conditions within subjects)
       p = ao{2}; t = ao{3};        % p-value and t-statistic
-    else p=[]; t=[];    % only one condition - no stats possible
     end
+  else p=[]; t=[];    % only one condition - no stats possible
   end
 end
 

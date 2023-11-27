@@ -154,7 +154,7 @@ end
 % use nonoverlapping bins? 
 % advantage is the values are independent, and thus stats are simpler.
 % if not, use overlapping bins, which must be compared with permutation test 
-NO_OVERLAP = Nq*binwidth == 1; 
+NO_OVERLAP = (Nq-1)*binwidth == 1; 
 STANDARD_BINNING = false;
 i=find(strcmpi(varargin, 'standardbinning')); if i, 
   STANDARD_BINNING = varargin{i+1}; varargin([i i+1])=[]; 
@@ -319,7 +319,7 @@ t_y = YTRANSFORM( Yb );
 h=[];                         % keep graphics / line handles
 cols = get(gca,'ColorOrder'); % use axis colours for different lines
 
-if NO_OVERLAP % for non-overlaping bins, we have just a couple of bins
+if 0 %NO_OVERLAP % for non-overlaping bins, we have just a couple of bins
   for j=1:size(X,2) % so for each bin, 
     if doErrorBars  % draw error-bars for both X and Y
       if size(X,1)>1  % num subjects > 1

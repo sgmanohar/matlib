@@ -54,6 +54,7 @@ function [Xb,Yb, p,t, h, resid ]=conditionalPlot(X,Y, Nbins, varargin)
 
 %%%%%%%%%%%%%%%%%%%%%
 % Setup Parameters
+p = []; t = [];
 
 % handle tables as inputs
 if iscell(X) & numel(X)<6 & istable(X{1}) % table form
@@ -336,7 +337,7 @@ if 0 %NO_OVERLAP % for non-overlaping bins, we have just a couple of bins
         errorbarxy(  XTRANSFORM(  sq(nanmean(t_x(:,j,:),1))  ), ...
                      YTRANSFORM(  sq(nanmean(t_y(:,j,:),1))  ), ...
           ex,ey ...
-          ,[],[], cols(j,:)  , .2*[1 1 1]);
+          ,[],[], cols(j,:)  , cols(j,:));
       else % only one subject
         if ~isequal(XTRANSFORM, T.identity) || ~isequal(YTRANSFORM, T.identity)
           warning('transforms not applied'); 

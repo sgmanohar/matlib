@@ -402,7 +402,11 @@ else % SLIDING BIN = we have a whole curve to plot
         'area',FILL_AREA,'smooth',SMOOTH,'plotargs',{'marker','.', plotargs{:}},'color',colj);
     end
     if PLOT_INDIVIDUALS
-      plot( squeeze(t_x(:,j,:))',  squeeze(t_y(:,j,:))' ,'color',colj); 
+        if SMOOTH
+            plot(smoothn(squeeze(t_x(:,j,:))',SMOOTH),  smoothn(squeeze(t_y(:,j,:))',SMOOTH) ,'color',colj); 
+        else
+            plot( squeeze(t_x(:,j,:))',  squeeze(t_y(:,j,:))' ,'color',colj); 
+        end
     end
     hold on
   end

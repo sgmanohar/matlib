@@ -16,7 +16,7 @@ if(isnumeric(a))
         if(any(size(a)~=size(b))) ;return;end;
         if(length(a)==0) r=1;return ;end;
         if(all(isnan(a),'all') && all(isnan(b),'all')); r=1; return;end;
-        if any(a~=b) ;return;end;
+        if any(a~=b,'all') ;return;end;
         r=1;return;
 end;
 if(iscell(a))
@@ -40,7 +40,7 @@ if(isstruct(a))
     r=1;return;
 end;
 if(islogical(a))
-    r=all(a==b);
+    r=all(a==b,'all');
     return;
 end;
 if(ischar(a))

@@ -61,6 +61,6 @@ if isempty(Z) return; end
 % allow some constant columns
 badcolumns = all(isnan(Z));
 if any(badcolumns)
-  warning('input to nanzscore contains constant columns - ignored');
+%   warning('nanzscore:constant', 'input to nanzscore contains constant columns - ignored');
   Z(:,badcolumns) = X(:,badcolumns);
 end

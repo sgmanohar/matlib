@@ -130,7 +130,7 @@ else % 2D data
     handles=[];
     for i=1:size(X,2)
       [b(i,:) bint(i,:,:) r(i,:) rint(i,:,:) stats(i,:) h] = scatterRegress(X(:,i),Y(:,i),...
-        varargin{:},'plot_ci',0,'pearson',PEARSON, 'plotline', PLOTLINE, 'showzero', SHOW_ZERO,...
+        varargin{:},'plot_ci',PLOT_CI,'pearson',PEARSON, 'plotline', PLOTLINE, 'showzero', SHOW_ZERO,...
         'text',TEXT);  % pass on parameters, but don't do CI
       handles=[handles h]; % keep figure handles
       set(h(1), 'CData', colourMap(i,size(X,2)) );  % set colours to match.
@@ -165,6 +165,8 @@ else % 2D data
       % annotation('textbox',[0.5,0.5, 0.1 0.1],'String',sprintf('r^2=%g\np=%g',stats(1),stats(3)), 'LineStyle','none')
       if TEXT==1 || (TEXT==2&&isSignif); text(mean(xlim),max(ylim),anno); end
       if PLOT_CI && exist('regression_line_ci') && (PLOT_CI==1 || (isSignif && PLOT_CI==2))
+        bad = isnan(X) | isnan(Y);
+        X(bad) = []; Y(bad) = [];
         [top_int,bot_int,x_int]=regression_line_ci( 0.05, flipud(b), X(:),Y(:) , 100, min(xlim), max(xlim));
         colororder = get(gca,'colororder');
         if FILL

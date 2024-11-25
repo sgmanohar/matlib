@@ -11,6 +11,9 @@ function [ A, Lmodel, t ] = rmanova(T, varnames, varargin)
 %  'categorical': which variables (columns or dimensions of T) are
 %                 categorical. Subject (1) is categorical by default.
 %                 Others are linear regressors.
+%  'dummyVarCoding': 'effect' (default) or 'reference'. only used for
+%               categorical variables. passed into fitglme
+% 
 % Extra parmeters are passed to fitgmle, e.g. 'covariancepattern'. 
 % to do a pure ANOVA, use 'CovariancePattern','CompSymm'.
 % 
@@ -19,6 +22,10 @@ function [ A, Lmodel, t ] = rmanova(T, varnames, varargin)
 %          t     = data formatted into a table
 %  -- requires fitglme (Matlab 2015 or later)
 % sgm 2017
+
+if ~any(strcmpi(varargin, 'DummyVarCoding'))
+    varargin = [varargin, 'DummyVarCoding', 'effects'];
+end
 
 % which random effects to model?
 RE = enum({'FACTORIAL','INTERCEPT'});
@@ -29,10 +36,10 @@ re = RE.INTERCEPT;
 
 NOCATEG = false; % prevent categoricalising factor variables? (unless explicitly specified)
 
-if ndims(T)>2 || ... % if the data is multidimensional, or if it is a table 
+if ~istable(T) && (ndims(T)>2 || ... % if the data is multidimensional, or if it is a table 
     ...% and the first column is 
     ~(all(isinteger(T(:,1))) || ...% not all integers
-      all(diff(diff(unique(T(:,1))))==0) ) % and not regularly spaced (like subjects)
+      all(diff(diff(unique(T(:,1))))==0) ) )% and not regularly spaced (like subjects)
   % then, convert the array into a table.
   T=dePivot(T);
   if exist('varnames','var') &&  length(varnames) == size(T,2)-1 % have they omitted the dependent var name?
@@ -103,7 +110,7 @@ end
 %%%%%%%%%%%%% Actually fit the model here %%%%%%%%%%%%%%%  
 if exist('fitglme','file'),  fitfun = @fitglme;
 else                         fitfun = @fitlme;   end
-Lmodel = fitfun(t,model, 'dummyvarcoding','effects', varargin{:});
+Lmodel = fitfun(t,model, varargin{:});
 %model = fitglme(t,model, varargin{:});
 try % if we have newer stats toolbox: use satterthwaite correction for DF
   A = anova(Lmodel,'dfmethod','satterthwaite');

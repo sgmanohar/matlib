@@ -108,6 +108,9 @@ for i=1:length(list)
             [sl{j}.VOID_TRIAL_t]=deal([]);
             [sl{j}.VOID_TRIAL_m]=deal([]);
         end;
+		if j>1
+            [ss, sl{j}] = ensureStructsAssignable(ss, sl{j});
+        end
         ss=[ss sl{j}];
     end;
     if exist('zz')~=1

@@ -135,13 +135,14 @@ info.sCurvS = []; % signed maximal curvature
 info.sDepA  = []; % angle of departure (where it leaves the 30-pixel circle)
 info.sSpd   = []; % maximum speed of eye during saccade
 info.sDur   = []; % duration of saccade
+info.sBlinkT = [];
 
 prev_warn_state = warning('off','nancat:emptyskipped');
 for(i=1:length(s))  % for each trial
           scStart=nan; scEnd=nan; % start with blank values for this trial
         scBegpt=nan; scBlink=nan; scBendT=nan; scBendA=nan; scCurvA=nan;
         scCurvS=nan; scAmpl=nan; scCurvT=nan; scEndPt=nan; scBendP=nan;
-        scBendR=nan; scDepA=nan; scSpd=nan;  
+        scBendR=nan; scDepA=nan; scSpd=nan; scBlinkT = nan;
 
   if ~isempty(s(i).pos) % are there any samples?
     %%%% Epoching
@@ -249,6 +250,7 @@ for(i=1:length(s))  % for each trial
             scEndpt   = scPath(end);   % vector of this saccade
             scEndPt(j)= p(scEnd(j));   % endpoint of each saccade
             scBlink(j)= any(isnan(scPath)); % will catch nans in x or y
+            scBlinkT(j) = max([0 find(isnan(scPath),1)+scStartT(j) ]);
             scAmpl(j) = abs(scEndpt);  % length of the vector from start to end
             % calculate deviation from a straight line, at each p
             % i.e. let e be the unit saccade direction (scEndpt "hat")
@@ -307,6 +309,8 @@ for(i=1:length(s))  % for each trial
               if ~isempty(departT)   scDepA(j) = angle( scPath(departT) ); 
               else scDepA(j)=nan;  % only valid for larger saccades.
               end
+            else
+                scSpd(j)=nan; scDepA(j)=nan;scCurvT(j)=nan;scCurvS=nan;
             end
           end
         end
@@ -342,7 +346,7 @@ for(i=1:length(s))  % for each trial
         ABSMAX   = 20000;
         % speed above which data is removed around nans. Normally 1.5 or
         % 2.5
-        BLINKSPD = 3.5;    
+        BLINKSPD = 2.5;    
       else
         ABSMAX   = 2000;
         BLINKSPD = 0.5;    
@@ -475,7 +479,7 @@ for(i=1:length(s))  % for each trial
         
           scStartT(j)=nan; scVec(j)=nan; scEndpt(j)=nan; scBlink(j)=nan;
           scAmpl(j)=nan; scBendT(j)=nan; scBendR(j)=nan; scCurvA(j)=nan;
-          scCurvS(j)=nan; scDepA(j)=nan; scSpd(j)=nan; scEndT = nan;
+          scCurvS(j)=nan; scDepA(j)=nan; scSpd(j)=nan; scEndT(j) = nan; scBlink(j)=nan;
           %info.sVec(end,j)=nan; info.sCurvA(end,j)=nan; info.sCurvS(end,j)=nan; info.sEndpt(end,j)=nan;
           %info.sBendT(end,j)=nan; info.sBendA(end,j)=nan;  info.sAmpl(end,j)=nan; info.sDepA(end,j)=nan;
         end % then reject this saccade
@@ -496,7 +500,7 @@ for(i=1:length(s))  % for each trial
       if ~exist('scStartT','var') || isempty(scStartT) % no saccades on this trial?
         scStartT=nan; scVec=nan; scEndPt=nan; scBlink=true;
         scAmpl=nan; scBendT=nan; scBendR=nan; scVec=nan;
-        scCurvA=nan; scCurvS=nan; scDepA=nan; scSpd=nan; scEndT = nan;
+        scCurvA=nan; scCurvS=nan; scDepA=nan; scSpd=nan; scEndT = nan;scBlinkT=nan;
       end
         % now add all the saccades on this trial to the global list of saccades
       info.sRT    = nancat(1, info.sRT,    scStartT'-t1);
@@ -511,6 +515,7 @@ for(i=1:length(s))  % for each trial
       info.sDepA  = nancat(1, info.sDepA,  scDepA);
       info.sSpd   = nancat(1, info.sSpd,   scSpd);
       info.sDur   = nancat(1, info.sDur,   scEndT' - scStartT'); % duration 
+      info.sBlinkT = nancat(1, info.sBlinkT, scBlinkT);
   
   %%%% Browsing saccades
   % plot traces trial-by-trial and then pause - very useful for debugging.

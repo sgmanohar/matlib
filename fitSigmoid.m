@@ -1,4 +1,4 @@
-function [params, values, hplot, means]=fitSigmoid(Y, varargin)
+function [params, values, h, means]=fitSigmoid(Y, varargin)
 % [params, values] = fitSigmoid(Y, varargin)
 % Fit a sigmoid curve to each column of Y.
 % Fitting is done by least squares. 
@@ -31,9 +31,10 @@ function [params, values, hplot, means]=fitSigmoid(Y, varargin)
 % returns:
 %     parameter estimates for p1...p4 
 %     values corersponding to Xmodel
-%     hplot is the handles of the plotted objects, column 1 = model, column 2 =
+%     h is the handles of the plotted objects, column 1 = model, column 2 =
 %         data, column 3 = dotted line for bias, column 4 = horizontal 50%
 %         meridian.
+%     means has tsse, plus stuff for grand-mean if plot>2
 % 
 % sanjay manohar 2015
 
@@ -108,12 +109,12 @@ for i=1:NS % for each column
     if PLOT>1,     subplot(nPlot,nPlot,i); end
     h(1,i)=plot( xmodel, ymodel );  % model
     hold on;
-    h(2,i)=plot(   X(:,i) , Y(:,i) ,'o'); % data
+    h(2,i)=plot(   X(:,i) , Y(:,i) ,'o', 'Color', h(1,i).Color); % data
     if p1(i,1)>minX & p1(i,1)<maxX
-      h(3,i)=plot( p1(i,2) * [ 1 1 ], ylim ,':'); %  bias line
+      h(3,i)=plot( p1(i,2) * [ 1 1 ], ylim ,':k'); %  bias line
     end
     if i==1 || PLOT>1 % plot baseline
-      h(4,i)=plot( xlim, (minY+Yrange/2)*[1 1] ,':');
+      h(4,i)=plot( xlim, (minY+Yrange/2)*[1 1] ,':k');
     end
     % set(gca,'xtick',X(:,i), 'xticklabel',X(:,i));
     if PLOT>1, 
@@ -134,10 +135,12 @@ if PLOT>2 && size(oY,2)>2 % are there multiple columns, and are we plotting gran
   hold on;  plot(xmodel, means.ymodel_meanp,':'); 
   % now try fitting the grand mean curve?
   sse     = @(p)  sum( ( mean(Y,2) - predict(X(:,i),p) ).^2 );
-  [means.p1 means.tsse] = fminsearchs( sse, p0 , ITER , OPTIM);
+  [means.p1, means.tsse] = fminsearchs( sse, p0 , ITER , OPTIM);
   means.ymodel_meany = predict(xmodel, means.p1) ;
   plot(xmodel, means.ymodel_meany,'r:'); 
   legend({'mean','mean(params)','model mean(y)'});
+else
+    means.indiv_tsse = tsse;
 end
 if PLOT>1, makeSubplotScalesEqual(nPlot,nPlot, [1:NS, nPlot*nPlot]); end
 if ~prevhold, hold off; end

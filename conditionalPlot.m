@@ -54,6 +54,7 @@ function [Xb,Yb, p,t, h, resid ]=conditionalPlot(X,Y, Nbins, varargin)
 
 %%%%%%%%%%%%%%%%%%%%%
 % Setup Parameters
+p = []; t = [];
 
 % handle tables as inputs
 if iscell(X) & numel(X)<6 & istable(X{1}) % table form
@@ -154,7 +155,7 @@ end
 % use nonoverlapping bins? 
 % advantage is the values are independent, and thus stats are simpler.
 % if not, use overlapping bins, which must be compared with permutation test 
-NO_OVERLAP = Nq*binwidth == 1; 
+NO_OVERLAP = (Nq-1)*binwidth == 1; 
 STANDARD_BINNING = false;
 i=find(strcmpi(varargin, 'standardbinning')); if i, 
   STANDARD_BINNING = varargin{i+1}; varargin([i i+1])=[]; 
@@ -198,6 +199,9 @@ else  plotargs={};
 end
 
 DO_STATS = nargout>2; % whether to do statistics?
+i=find(strcmpi(varargin,'DoStats')); if i
+  DO_STATS = varargin{i+1}; varargin([i i+1])=[]; 
+end
 DO_STATS_PLOT = nargout > 4; 
 i=find(strcmpi(varargin,'plotstats')); if i
   DO_STATS_PLOT = varargin{i+1}; varargin([i i+1])=[]; 
@@ -316,7 +320,7 @@ t_y = YTRANSFORM( Yb );
 h=[];                         % keep graphics / line handles
 cols = get(gca,'ColorOrder'); % use axis colours for different lines
 
-if NO_OVERLAP % for non-overlaping bins, we have just a couple of bins
+if 0 %NO_OVERLAP % for non-overlaping bins, we have just a couple of bins
   for j=1:size(X,2) % so for each bin, 
     if doErrorBars  % draw error-bars for both X and Y
       if size(X,1)>1  % num subjects > 1
@@ -333,7 +337,7 @@ if NO_OVERLAP % for non-overlaping bins, we have just a couple of bins
         errorbarxy(  XTRANSFORM(  sq(nanmean(t_x(:,j,:),1))  ), ...
                      YTRANSFORM(  sq(nanmean(t_y(:,j,:),1))  ), ...
           ex,ey ...
-          ,[],[], cols(j,:)  , .2*[1 1 1]);
+          ,[],[], cols(j,:)  , cols(j,:));
       else % only one subject
         if ~isequal(XTRANSFORM, T.identity) || ~isequal(YTRANSFORM, T.identity)
           warning('transforms not applied'); 
@@ -398,7 +402,11 @@ else % SLIDING BIN = we have a whole curve to plot
         'area',FILL_AREA,'smooth',SMOOTH,'plotargs',{'marker','.', plotargs{:}},'color',colj);
     end
     if PLOT_INDIVIDUALS
-      plot( squeeze(t_x(:,j,:))',  squeeze(t_y(:,j,:))' ,'color',colj); 
+        if SMOOTH
+            plot(smoothn(squeeze(t_x(:,j,:))',SMOOTH),  smoothn(squeeze(t_y(:,j,:))',SMOOTH) ,'color',colj); 
+        else
+            plot( squeeze(t_x(:,j,:))',  squeeze(t_y(:,j,:))' ,'color',colj); 
+        end
     end
     hold on
   end
@@ -420,8 +428,8 @@ else % SLIDING BIN = we have a whole curve to plot
         DES, [0 1], ...            % statistics: contrast for linear effect of conditions
         repmat([1:NS]', NC,1)  );  % group by subject (i.e. permute conditions within subjects)
       p = ao{2}; t = ao{3};        % p-value and t-statistic
-    else p=[]; t=[];    % only one condition - no stats possible
     end
+  else p=[]; t=[];    % only one condition - no stats possible
   end
 end
 

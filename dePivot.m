@@ -13,13 +13,11 @@ function Y = dePivot(X, varargin)
 %                              same size as X, specifying extra categories 
 %                              for the items of X, which are just expanded
 %                              into a new column.
-% 
-%             'keepNaN'      : 1 = keep NaNs, 0 = remove (default)
 % sgm 2015
 
-[ extraCategs, keepNaN  ]  =parsepvpairs( ...
-  {'extraCategs','keepNaN'}, {[],0},...
-    varargin{:});
+[ extraCategs, removenans ]  =parsepvpairs( ...
+  {'extraCategs', 'removenans'},...
+  {[],true}, varargin{:});
 
     sz=size(X); Y=[];
     for i=1:length(sz) % for each dimension of X
@@ -40,6 +38,6 @@ function Y = dePivot(X, varargin)
       end
     end
     Y=[Y X(:)];
-    if keepNaN==0
-        Y(any(isnan(Y),2),:)=[]; % remove rows where X is nan
+    if removenans
+      Y(any(isnan(Y),2),:)=[]; % remove rows where X is nan
     end
